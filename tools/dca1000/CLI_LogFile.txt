@@ -1,0 +1,3384 @@
+
+Tue Jun 09 17:45:48 2026
+FPGA Configuration Command (req)
+
+Tue Jun 09 17:45:58 2026
+FPGA Configuration : 
+Timeout Error! System disconnected
+
+Tue Jun 09 17:45:58 2026
+Return status : -5
+
+Tue Jun 09 17:48:20 2026
+FPGA Configuration Command (req)
+
+Tue Jun 09 17:48:20 2026
+FPGA Configuration command : Success
+
+Tue Jun 09 17:48:20 2026
+Return status : 0
+
+Tue Jun 09 17:49:56 2026
+EEPROM Configuration Command (req)
+
+Tue Jun 09 17:49:56 2026
+EEPROM Configuration command : Success
+
+Tue Jun 09 17:49:56 2026
+Return status : 0
+
+Tue Jun 09 17:50:20 2026
+Invalid Command (resert_fpga). error[-4048]
+
+Tue Jun 09 17:50:29 2026
+Reset FPGA Command (req)
+
+Tue Jun 09 17:50:29 2026
+Reset FPGA command : Success
+
+Tue Jun 09 17:50:29 2026
+Return status : 0
+
+Tue Jun 09 17:51:02 2026
+Reset AR Device Command (req)
+
+Tue Jun 09 17:51:02 2026
+Reset AR Device command : Success
+
+Tue Jun 09 17:51:02 2026
+Return status : 0
+
+Tue Jun 09 17:55:03 2026
+Start Record Command (req)
+
+Tue Jun 09 17:55:03 2026
+Start Record Command (req)
+
+Tue Jun 09 17:55:03 2026
+Start Record command : Success
+
+Tue Jun 09 17:55:13 2026
+Start Record : 
+Timeout Error! System disconnected
+
+Tue Jun 09 17:55:13 2026
+Return status : -5
+
+Tue Jun 09 17:55:47 2026
+stop_record
+
+Tue Jun 09 17:55:47 2026
+No record process is running.
+
+Tue Jun 09 17:57:10 2026
+FPGA Configuration Command (req)
+
+Tue Jun 09 17:57:10 2026
+FPGA Configuration command : Success
+
+Tue Jun 09 17:57:10 2026
+Return status : 0
+
+Tue Jun 09 17:57:15 2026
+Start Record Command (req)
+
+Tue Jun 09 17:57:15 2026
+Start Record Command (req)
+
+Tue Jun 09 17:57:15 2026
+Start Record command : Success
+
+Tue Jun 09 17:57:15 2026
+Return status : 0
+
+Tue Jun 09 17:57:15 2026
+Start Record command : Success
+
+Tue Jun 09 17:57:47 2026
+Stop Record Command (req)
+
+Tue Jun 09 17:57:47 2026
+Record stop is done successfully
+
+Tue Jun 09 17:57:47 2026
+Stop Record command : Success
+
+Thu Jun 11 16:22:00 2026
+FPGA Configuration Command (req)
+
+Thu Jun 11 16:22:00 2026
+FPGA Configuration command : Success
+
+Thu Jun 11 16:22:00 2026
+Return status : 0
+
+Thu Jun 11 16:22:23 2026
+Configure Record Command (req)
+
+Thu Jun 11 16:22:23 2026
+Configure Record command : Success
+
+Thu Jun 11 16:22:23 2026
+Return status : 0
+
+Thu Jun 11 16:22:43 2026
+Start Record Command (req)
+
+Thu Jun 11 16:22:43 2026
+Start Record Command (req)
+
+Thu Jun 11 16:22:44 2026
+Start Record command : Success
+
+Thu Jun 11 16:22:44 2026
+Return status : 0
+
+Thu Jun 11 16:22:44 2026
+Start Record command : Success
+
+Thu Jun 11 16:23:05 2026
+Stop Record Command (req)
+
+Thu Jun 11 16:23:05 2026
+Record stop is done successfully
+
+Thu Jun 11 16:23:06 2026
+Stop Record command : Success
+
+Thu Jun 11 16:23:31 2026
+Query system status Command (req)
+
+Thu Jun 11 16:23:31 2026
+System is connected.
+
+Thu Jun 11 16:23:31 2026
+Return status : 0
+
+Thu Jun 11 16:27:30 2026
+FPGA Configuration Command (req)
+
+Thu Jun 11 16:27:30 2026
+FPGA Configuration command : Success
+
+Thu Jun 11 16:27:30 2026
+Return status : 0
+
+Thu Jun 11 16:27:34 2026
+Configure Record Command (req)
+
+Thu Jun 11 16:27:34 2026
+Configure Record command : Success
+
+Thu Jun 11 16:27:34 2026
+Return status : 0
+
+Thu Jun 11 16:27:38 2026
+Start Record Command (req)
+
+Thu Jun 11 16:27:39 2026
+Start Record Command (req)
+
+Thu Jun 11 16:27:39 2026
+Start Record command : Success
+
+Thu Jun 11 16:27:39 2026
+Return status : 0
+
+Thu Jun 11 16:27:39 2026
+Start Record command : Success
+
+Thu Jun 11 16:27:52 2026
+Stop Record Command (req)
+
+Thu Jun 11 16:27:52 2026
+Record stop is done successfully
+
+Thu Jun 11 16:27:53 2026
+Stop Record command : Success
+
+Thu Jun 11 16:29:42 2026
+Start Record Command (req)
+
+Thu Jun 11 16:29:42 2026
+Start Record Command (req)
+
+Thu Jun 11 16:29:42 2026
+Start Record command : Success
+
+Thu Jun 11 16:29:42 2026
+Return status : 0
+
+Thu Jun 11 16:29:42 2026
+Start Record command : Success
+
+Thu Jun 11 16:30:12 2026
+No LVDS data
+
+Thu Jun 11 16:30:12 2026
+Record stop is done successfully
+
+Thu Jun 11 16:30:26 2026
+Read Record Process Status (req)
+
+Thu Jun 11 16:30:26 2026
+No record process is running. [error -4002]
+
+Thu Jun 11 16:30:36 2026
+Start Record Command (req)
+
+Thu Jun 11 16:30:36 2026
+Start Record Command (req)
+
+Thu Jun 11 16:30:36 2026
+Start Record command : Success
+
+Thu Jun 11 16:30:36 2026
+Return status : 0
+
+Thu Jun 11 16:30:36 2026
+Start Record command : Success
+
+Thu Jun 11 16:31:06 2026
+No LVDS data
+
+Thu Jun 11 16:31:06 2026
+Record stop is done successfully
+
+Thu Jun 11 16:32:58 2026
+FPGA Configuration Command (req)
+
+Thu Jun 11 16:32:58 2026
+FPGA Configuration command : Success
+
+Thu Jun 11 16:32:58 2026
+Return status : 0
+
+Thu Jun 11 16:33:02 2026
+Configure Record Command (req)
+
+Thu Jun 11 16:33:02 2026
+Configure Record command : Success
+
+Thu Jun 11 16:33:02 2026
+Return status : 0
+
+Thu Jun 11 16:33:33 2026
+Start Record Command (req)
+
+Thu Jun 11 16:33:33 2026
+Start Record Command (req)
+
+Thu Jun 11 16:33:33 2026
+Start Record command : Success
+
+Thu Jun 11 16:33:33 2026
+Return status : 0
+
+Thu Jun 11 16:33:34 2026
+Start Record command : Success
+
+Thu Jun 11 16:34:54 2026
+Record is completed
+
+Thu Jun 11 16:34:54 2026
+Record stop is done successfully
+
+Tue Jun 16 17:42:20 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 17:42:30 2026
+FPGA Configuration : 
+Timeout Error! System disconnected
+
+Tue Jun 16 17:42:30 2026
+Return status : -5
+
+Tue Jun 16 17:43:06 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 17:43:16 2026
+FPGA Configuration : 
+Timeout Error! System disconnected
+
+Tue Jun 16 17:43:16 2026
+Return status : -5
+
+Tue Jun 16 17:45:25 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 17:45:25 2026
+FPGA Configuration command : Success
+
+Tue Jun 16 17:45:25 2026
+Return status : 0
+
+Tue Jun 16 17:47:41 2026
+Configure Record Command (req)
+
+Tue Jun 16 17:47:41 2026
+Configure Record command : Success
+
+Tue Jun 16 17:47:41 2026
+Return status : 0
+
+Tue Jun 16 17:48:02 2026
+Start Record Command (req)
+
+Tue Jun 16 17:48:02 2026
+Start Record Command (req)
+
+Tue Jun 16 17:48:02 2026
+Start Record command : Success
+
+Tue Jun 16 17:48:02 2026
+Return status : 0
+
+Tue Jun 16 17:48:02 2026
+Start Record command : Success
+
+Tue Jun 16 17:48:32 2026
+No LVDS data
+
+Tue Jun 16 17:48:32 2026
+Record stop is done successfully
+
+Tue Jun 16 17:49:09 2026
+stop_record
+
+Tue Jun 16 17:49:09 2026
+No record process is running.
+
+Tue Jun 16 17:51:11 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 17:51:11 2026
+FPGA Configuration command : Success
+
+Tue Jun 16 17:51:11 2026
+Return status : 0
+
+Tue Jun 16 17:51:18 2026
+Configure Record Command (req)
+
+Tue Jun 16 17:51:18 2026
+Configure Record command : Success
+
+Tue Jun 16 17:51:18 2026
+Return status : 0
+
+Tue Jun 16 17:51:22 2026
+Start Record Command (req)
+
+Tue Jun 16 17:51:23 2026
+Start Record Command (req)
+
+Tue Jun 16 17:51:23 2026
+Start Record command : Success
+
+Tue Jun 16 17:51:23 2026
+Return status : 0
+
+Tue Jun 16 17:51:23 2026
+Start Record command : Success
+
+Tue Jun 16 17:51:34 2026
+Stop Record Command (req)
+
+Tue Jun 16 17:51:34 2026
+Record stop is done successfully
+
+Tue Jun 16 17:51:35 2026
+Stop Record command : Success
+
+Tue Jun 16 18:05:52 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 18:06:02 2026
+FPGA Configuration : 
+Timeout Error! System disconnected
+
+Tue Jun 16 18:06:02 2026
+Return status : -5
+
+Tue Jun 16 18:07:33 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 18:07:43 2026
+FPGA Configuration : 
+Timeout Error! System disconnected
+
+Tue Jun 16 18:07:43 2026
+Return status : -5
+
+Tue Jun 16 18:08:45 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 18:08:55 2026
+FPGA Configuration : 
+Timeout Error! System disconnected
+
+Tue Jun 16 18:08:55 2026
+Return status : -5
+
+Tue Jun 16 18:12:21 2026
+FPGA Configuration Command (req)
+
+Tue Jun 16 18:12:31 2026
+FPGA Configuration : 
+Timeout Error! System disconnected
+
+Tue Jun 16 18:12:31 2026
+Return status : -5
+
+Fri Jun 19 10:17:53 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 10:17:53 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 10:17:53 2026
+Return status : 0
+
+Fri Jun 19 10:17:58 2026
+Configure Record Command (req)
+
+Fri Jun 19 10:17:58 2026
+Configure Record command : Success
+
+Fri Jun 19 10:17:58 2026
+Return status : 0
+
+Fri Jun 19 10:23:42 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 10:23:42 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 10:23:42 2026
+Return status : 0
+
+Fri Jun 19 10:23:45 2026
+Configure Record Command (req)
+
+Fri Jun 19 10:23:45 2026
+Configure Record command : Success
+
+Fri Jun 19 10:23:45 2026
+Return status : 0
+
+Fri Jun 19 10:23:46 2026
+Start Record Command (req)
+
+Fri Jun 19 10:23:47 2026
+Start Record Command (req)
+
+Fri Jun 19 10:23:47 2026
+Start Record command : Success
+
+Fri Jun 19 10:23:57 2026
+Start Record : 
+Timeout Error! System disconnected
+
+Fri Jun 19 10:23:57 2026
+Return status : -5
+
+Fri Jun 19 10:27:46 2026
+stop_record
+
+Fri Jun 19 10:27:46 2026
+No record process is running.
+
+Fri Jun 19 10:28:16 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 10:28:16 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 10:28:16 2026
+Return status : 0
+
+Fri Jun 19 10:28:20 2026
+Configure Record Command (req)
+
+Fri Jun 19 10:28:20 2026
+Configure Record command : Success
+
+Fri Jun 19 10:28:20 2026
+Return status : 0
+
+Fri Jun 19 10:28:23 2026
+Start Record Command (req)
+
+Fri Jun 19 10:28:24 2026
+Start Record Command (req)
+
+Fri Jun 19 10:28:24 2026
+Start Record command : Success
+
+Fri Jun 19 10:28:24 2026
+Return status : 0
+d : Success
+
+Fri Jun 19 10:28:31 2026
+Record is completed
+
+Fri Jun 19 10:28:31 2026
+Record stop is done successfully
+
+Fri Jun 19 10:28:38 2026
+stop_record
+
+Fri Jun 19 10:28:38 2026
+No record process is running.
+
+Fri Jun 19 10:28:58 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 10:28:58 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 10:28:58 2026
+Return status : 0
+
+Fri Jun 19 10:29:00 2026
+Configure Record Command (req)
+
+Fri Jun 19 10:29:00 2026
+Configure Record command : Success
+
+Fri Jun 19 10:29:00 2026
+Return status : 0
+
+Fri Jun 19 10:29:02 2026
+Start Record Command (req)
+
+Fri Jun 19 10:29:03 2026
+Start Record Command (req)
+
+Fri Jun 19 10:29:03 2026
+Start Record command : Success
+
+Fri Jun 19 10:29:03 2026
+Return status : 0
+
+Fri Jun 19 10:29:03 2026
+Start Record command : Success
+
+Fri Jun 19 10:29:09 2026
+Record is completed
+
+Fri Jun 19 10:29:09 2026
+Record stop is done successfully
+
+Fri Jun 19 10:29:32 2026
+stop_record
+
+Fri Jun 19 10:29:32 2026
+No record process is running.
+
+Fri Jun 19 10:31:24 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 10:31:24 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 10:31:24 2026
+Return status : 0
+
+Fri Jun 19 10:31:30 2026
+Configure Record Command (req)
+
+Fri Jun 19 10:31:30 2026
+Configure Record command : Success
+
+Fri Jun 19 10:31:30 2026
+Return status : 0
+
+Fri Jun 19 10:31:45 2026
+Start Record Command (req)
+
+Fri Jun 19 10:31:45 2026
+Start Record Command (req)
+
+Fri Jun 19 10:31:45 2026
+Start Record command : Success
+
+Fri Jun 19 10:31:45 2026
+Return status : 0
+
+Fri Jun 19 10:31:45 2026
+Start Record command : Success
+
+Fri Jun 19 10:32:17 2026
+Stop Record Command (req)
+
+Fri Jun 19 10:32:17 2026
+Record stop is done successfully
+
+Fri Jun 19 10:32:17 2026
+Stop Record command : Success
+
+Fri Jun 19 10:34:11 2026
+Read Record Process Status (req)
+
+Fri Jun 19 10:34:11 2026
+No record process is running. [error -4002]
+
+Fri Jun 19 10:35:11 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 10:35:11 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 10:35:11 2026
+Return status : 0
+
+Fri Jun 19 10:35:15 2026
+Configure Record Command (req)
+
+Fri Jun 19 10:35:15 2026
+Configure Record command : Success
+
+Fri Jun 19 10:35:15 2026
+Return status : 0
+
+Fri Jun 19 10:35:17 2026
+Start Record Command (req)
+
+Fri Jun 19 10:35:18 2026
+Start Record Command (req)
+
+Fri Jun 19 10:35:18 2026
+Start Record command : Success
+
+Fri Jun 19 10:35:18 2026
+Return status : 0
+
+Fri Jun 19 10:35:18 2026
+Start Record command : Success
+
+Fri Jun 19 10:35:31 2026
+Read Record Process Status (req)
+
+Fri Jun 19 10:35:31 2026
+Record is in progress. [status -4029]
+
+Fri Jun 19 10:35:54 2026
+query_sys_status
+
+Fri Jun 19 10:35:54 2026
+Stop the already running process.
+
+Fri Jun 19 10:35:58 2026
+query_sys_status
+
+Fri Jun 19 10:35:58 2026
+Stop the already running process.
+
+Fri Jun 19 10:36:16 2026
+Stop Record Command (req)
+
+Fri Jun 19 10:36:16 2026
+Record stop is done successfully
+
+Fri Jun 19 10:36:17 2026
+Stop Record command : Success
+
+Fri Jun 19 10:36:20 2026
+Query system status Command (req)
+
+Fri Jun 19 10:36:20 2026
+System is connected.
+
+Fri Jun 19 10:36:20 2026
+Return status : 0
+
+Fri Jun 19 11:16:43 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 11:16:43 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 11:16:43 2026
+Return status : 0
+
+Fri Jun 19 11:16:49 2026
+Configure Record Command (req)
+
+Fri Jun 19 11:16:49 2026
+Configure Record command : Success
+
+Fri Jun 19 11:16:49 2026
+Return status : 0
+
+Fri Jun 19 11:16:52 2026
+Start Record Command (req)
+
+Fri Jun 19 11:16:53 2026
+Start Record Command (req)
+
+Fri Jun 19 11:16:53 2026
+Start Record command : Success
+
+Fri Jun 19 11:17:03 2026
+Start Record : 
+Timeout Error! System disconnected
+
+Fri Jun 19 11:17:03 2026
+Return status : -5
+
+Fri Jun 19 11:17:53 2026
+stop_record
+
+Fri Jun 19 11:17:53 2026
+No record process is running.
+
+Fri Jun 19 12:05:25 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 12:05:25 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 12:05:25 2026
+Return status : 0
+
+Fri Jun 19 12:05:29 2026
+Configure Record Command (req)
+
+Fri Jun 19 12:05:29 2026
+Configure Record command : Success
+
+Fri Jun 19 12:05:29 2026
+Return status : 0
+
+Fri Jun 19 12:05:35 2026
+Start Record Command (req)
+
+Fri Jun 19 12:05:36 2026
+Start Record Command (req)
+
+Fri Jun 19 12:05:36 2026
+Start Record command : Success
+
+Fri Jun 19 12:05:36 2026
+Start Record command : Success
+
+Fri Jun 19 12:05:36 2026
+Return status : 0
+
+Fri Jun 19 12:08:10 2026
+Record is completed
+
+Fri Jun 19 12:08:10 2026
+Record stop is done successfully
+
+Fri Jun 19 12:08:30 2026
+stop_record
+
+Fri Jun 19 12:08:30 2026
+No record process is running.
+
+Fri Jun 19 12:16:44 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 12:16:44 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 12:16:44 2026
+Return status : 0
+
+Fri Jun 19 12:16:48 2026
+Configure Record Command (req)
+
+Fri Jun 19 12:16:48 2026
+Configure Record command : Success
+
+Fri Jun 19 12:16:48 2026
+Return status : 0
+
+Fri Jun 19 12:16:52 2026
+Start Record Command (req)
+
+Fri Jun 19 12:16:52 2026
+Ethernet connection (req)
+
+Fri Jun 19 12:16:52 2026
+Ethernet connection failed. [error -4051]
+
+Fri Jun 19 12:16:59 2026
+Start Record command : Timeout Error! Couldnt read the record process status. [error 4071]
+
+Fri Jun 19 12:17:29 2026
+Start Record Command (req)
+
+Fri Jun 19 12:17:30 2026
+Ethernet connection (req)
+
+Fri Jun 19 12:17:30 2026
+Ethernet connection failed. [error -4051]
+
+Fri Jun 19 12:17:37 2026
+Start Record command : Timeout Error! Couldnt read the record process status. [error 4071]
+
+Fri Jun 19 12:34:32 2026
+stop_record
+
+Fri Jun 19 12:34:32 2026
+No record process is running.
+
+Fri Jun 19 12:34:32 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 12:34:32 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 12:34:32 2026
+Return status : 0
+
+Fri Jun 19 12:34:32 2026
+Configure Record Command (req)
+
+Fri Jun 19 12:34:32 2026
+Configure Record command : Success
+
+Fri Jun 19 12:34:32 2026
+Return status : 0
+
+Fri Jun 19 12:34:32 2026
+Start Record Command (req)
+
+Fri Jun 19 12:34:33 2026
+Start Record Command (req)
+
+Fri Jun 19 12:34:33 2026
+Start Record command : Success
+
+Fri Jun 19 12:34:33 2026
+Return status : 0
+
+Fri Jun 19 12:34:34 2026
+Start Record command : Success
+
+Fri Jun 19 12:35:03 2026
+No LVDS data
+
+Fri Jun 19 12:35:03 2026
+Record stop is done successfully
+
+Fri Jun 19 13:10:37 2026
+Read Record Process Status (req)
+
+Fri Jun 19 13:10:37 2026
+No record process is running. [error -4002]
+
+Fri Jun 19 13:10:57 2026
+stop_record
+
+Fri Jun 19 13:10:57 2026
+No record process is running.
+
+Fri Jun 19 13:10:57 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 13:10:57 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 13:10:57 2026
+Return status : 0
+
+Fri Jun 19 13:10:57 2026
+Configure Record Command (req)
+
+Fri Jun 19 13:10:57 2026
+Configure Record command : Success
+
+Fri Jun 19 13:10:57 2026
+Return status : 0
+
+Fri Jun 19 13:10:57 2026
+Start Record Command (req)
+
+Fri Jun 19 13:10:58 2026
+Start Record Command (req)
+
+Fri Jun 19 13:10:58 2026
+Start Record command : Success
+
+Fri Jun 19 13:10:58 2026
+Return status : 0
+
+Fri Jun 19 13:10:58 2026
+Start Record command : Success
+
+Fri Jun 19 13:11:28 2026
+No LVDS data
+
+Fri Jun 19 13:11:28 2026
+Record stop is done successfully
+
+Fri Jun 19 13:12:44 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 13:12:44 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 13:12:44 2026
+Return status : 0
+
+Fri Jun 19 13:12:47 2026
+Configure Record Command (req)
+
+Fri Jun 19 13:12:47 2026
+Configure Record command : Success
+
+Fri Jun 19 13:12:47 2026
+Return status : 0
+
+Fri Jun 19 13:12:50 2026
+Start Record Command (req)
+
+Fri Jun 19 13:12:50 2026
+Ethernet connection (req)
+
+Fri Jun 19 13:12:50 2026
+Ethernet connection failed. [error -4051]
+
+Fri Jun 19 13:12:58 2026
+Start Record command : Timeout Error! Couldnt read the record process status. [error 4071]
+
+Fri Jun 19 13:13:01 2026
+Start Record Command (req)
+
+Fri Jun 19 13:13:02 2026
+Ethernet connection (req)
+
+Fri Jun 19 13:13:02 2026
+Ethernet connection failed. [error -4051]
+
+Fri Jun 19 13:13:09 2026
+Start Record command : Timeout Error! Couldnt read the record process status. [error 4071]
+
+Fri Jun 19 13:13:12 2026
+Start Record Command (req)
+
+Fri Jun 19 13:13:13 2026
+Ethernet connection (req)
+
+Fri Jun 19 13:13:13 2026
+Ethernet connection failed. [error -4051]
+
+Fri Jun 19 13:13:20 2026
+Start Record command : Timeout Error! Couldnt read the record process status. [error 4071]
+
+Fri Jun 19 13:14:26 2026
+Start Record Command (req)
+
+Fri Jun 19 13:14:27 2026
+Ethernet connection (req)
+
+Fri Jun 19 13:14:27 2026
+Ethernet connection failed. [error -4051]
+
+Fri Jun 19 13:15:18 2026
+stop_record
+
+Fri Jun 19 13:15:18 2026
+No record process is running.
+
+Fri Jun 19 13:15:18 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 13:15:18 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 13:15:18 2026
+Return status : 0
+
+Fri Jun 19 13:15:18 2026
+Configure Record Command (req)
+
+Fri Jun 19 13:15:18 2026
+Configure Record command : Success
+
+Fri Jun 19 13:15:18 2026
+Return status : 0
+
+Fri Jun 19 13:15:18 2026
+Start Record Command (req)
+
+Fri Jun 19 13:15:19 2026
+Start Record Command (req)
+
+Fri Jun 19 13:15:20 2026
+Start Record command : Success
+
+Fri Jun 19 13:15:20 2026
+Return status : 0
+
+Fri Jun 19 13:15:20 2026
+Start Record command : Success
+
+Fri Jun 19 13:15:25 2026
+Read Record Process Status (req)
+
+Fri Jun 19 13:15:25 2026
+Record is in progress. [status -4029]
+
+Fri Jun 19 13:15:46 2026
+Read Record Process Status (req)
+
+Fri Jun 19 13:15:46 2026
+Record is in progress. [status -4029]
+
+Fri Jun 19 13:15:50 2026
+No LVDS data
+
+Fri Jun 19 13:15:50 2026
+Record stop is done successfully
+
+Fri Jun 19 13:15:54 2026
+Read Record Process Status (req)
+
+Fri Jun 19 13:15:54 2026
+No record process is running. [error -4002]
+
+Fri Jun 19 13:18:58 2026
+stop_record
+
+Fri Jun 19 13:18:58 2026
+No record process is running.
+
+Fri Jun 19 13:18:58 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 13:18:58 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 13:18:58 2026
+Return status : 0
+
+Fri Jun 19 13:18:58 2026
+Configure Record Command (req)
+
+Fri Jun 19 13:18:58 2026
+Configure Record command : Success
+
+Fri Jun 19 13:18:58 2026
+Return status : 0
+
+Fri Jun 19 13:19:00 2026
+Start Record Command (req)
+
+Fri Jun 19 13:19:02 2026
+Start Record Command (req)
+
+Fri Jun 19 13:19:02 2026
+Start Record command : Success
+
+Fri Jun 19 13:19:02 2026
+Return status : 0
+
+Fri Jun 19 13:19:02 2026
+Start Record command : Success
+
+Fri Jun 19 13:19:11 2026
+Read Record Process Status (req)
+
+Fri Jun 19 13:19:11 2026
+Record is in progress. [status -4029]
+
+Fri Jun 19 13:19:12 2026
+Read Record Process Status (req)
+
+Fri Jun 19 13:19:12 2026
+Record is in progress. [status -4029]
+
+Fri Jun 19 13:20:41 2026
+Record is completed
+
+Fri Jun 19 13:20:41 2026
+Record stop is done successfully
+
+Fri Jun 19 13:21:30 2026
+stop_record
+
+Fri Jun 19 13:21:30 2026
+No record process is running.
+
+Fri Jun 19 13:21:30 2026
+FPGA Configuration Command (req)
+
+Fri Jun 19 13:21:30 2026
+FPGA Configuration command : Success
+
+Fri Jun 19 13:21:30 2026
+Return status : 0
+
+Fri Jun 19 13:21:30 2026
+Configure Record Command (req)
+
+Fri Jun 19 13:21:30 2026
+Configure Record command : Success
+
+Fri Jun 19 13:21:30 2026
+Return status : 0
+
+Fri Jun 19 13:21:32 2026
+Start Record Command (req)
+
+Fri Jun 19 13:21:33 2026
+Ethernet connection (req)
+
+Fri Jun 19 13:21:33 2026
+Ethernet connection failed. [error -4051]
+
+Fri Jun 19 13:21:40 2026
+Start Record command : Timeout Error! Couldnt read the record process status. [error 4071]
+
+Fri Jun 19 13:21:40 2026
+Read Record Process Status (req)
+
+Fri Jun 19 13:21:40 2026
+No record process is running. [error -4002]
+
+Tue Jun 23 16:35:01 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 16:35:01 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 16:35:01 2026
+Return status : 0
+
+Tue Jun 23 16:35:24 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 16:35:24 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 16:35:24 2026
+Return status : 0
+
+Tue Jun 23 16:35:29 2026
+Configure Record Command (req)
+
+Tue Jun 23 16:35:29 2026
+Configure Record command : Success
+
+Tue Jun 23 16:35:29 2026
+Return status : 0
+
+Tue Jun 23 18:09:47 2026
+Invalid Command (ig.json). error[-4048]
+
+Tue Jun 23 18:11:10 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:11:10 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:11:10 2026
+Return status : 0
+
+Tue Jun 23 18:11:10 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:11:10 2026
+Configure Record command : Success
+
+Tue Jun 23 18:11:10 2026
+Return status : 0
+
+Tue Jun 23 18:11:10 2026
+Start Record Command (req)
+
+Tue Jun 23 18:11:11 2026
+Start Record Command (req)
+
+Tue Jun 23 18:11:11 2026
+Start Record command : Success
+
+Tue Jun 23 18:11:11 2026
+Return status : 0
+
+Tue Jun 23 18:11:12 2026
+Start Record command : Success
+
+Tue Jun 23 18:12:31 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 18:12:31 2026
+Record stop is done successfully
+
+Tue Jun 23 18:16:42 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:16:42 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:16:42 2026
+Return status : 0
+
+Tue Jun 23 18:16:47 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:16:47 2026
+Configure Record command : Success
+
+Tue Jun 23 18:16:47 2026
+Return status : 0
+
+Tue Jun 23 18:16:56 2026
+Start Record Command (req)
+
+Tue Jun 23 18:16:57 2026
+Start Record Command (req)
+
+Tue Jun 23 18:16:57 2026
+Start Record command : Success
+
+Tue Jun 23 18:16:57 2026
+Return status : 0
+
+Tue Jun 23 18:16:57 2026
+Start Record command : Success
+
+Tue Jun 23 18:17:10 2026
+Stop Record Command (req)
+
+Tue Jun 23 18:17:10 2026
+Record stop is done successfully
+
+Tue Jun 23 18:17:10 2026
+Stop Record command : Success
+
+Tue Jun 23 18:17:27 2026
+stop_record
+
+Tue Jun 23 18:17:27 2026
+No record process is running.
+
+Tue Jun 23 18:17:36 2026
+Start Record Command (req)
+
+Tue Jun 23 18:17:36 2026
+Start Record Command (req)
+
+Tue Jun 23 18:17:36 2026
+Start Record command : Success
+
+Tue Jun 23 18:17:36 2026
+Start Record command : Success
+
+Tue Jun 23 18:17:36 2026
+Return status : 0
+
+Tue Jun 23 18:17:53 2026
+Stop Record Command (req)
+
+Tue Jun 23 18:17:53 2026
+Record stop is done successfully
+
+Tue Jun 23 18:17:53 2026
+Stop Record command : Success
+
+Tue Jun 23 18:19:10 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:19:10 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:19:10 2026
+Return status : 0
+
+Tue Jun 23 18:19:10 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:19:10 2026
+Configure Record command : Success
+
+Tue Jun 23 18:19:10 2026
+Return status : 0
+
+Tue Jun 23 18:19:12 2026
+Start Record Command (req)
+
+Tue Jun 23 18:19:13 2026
+Start Record Command (req)
+
+Tue Jun 23 18:19:13 2026
+Start Record command : Success
+
+Tue Jun 23 18:19:13 2026
+Return status : 0
+d : Success
+
+Tue Jun 23 18:20:53 2026
+Record is completed
+
+Tue Jun 23 18:20:53 2026
+Record stop is done successfully
+
+Tue Jun 23 18:21:15 2026
+stop_record
+
+Tue Jun 23 18:21:15 2026
+No record process is running.
+
+Tue Jun 23 18:21:20 2026
+stop_record
+
+Tue Jun 23 18:21:20 2026
+No record process is running.
+
+Tue Jun 23 18:21:26 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:21:26 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:21:26 2026
+Return status : 0
+
+Tue Jun 23 18:21:26 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:21:26 2026
+Configure Record command : Success
+
+Tue Jun 23 18:21:26 2026
+Return status : 0
+
+Tue Jun 23 18:21:28 2026
+Start Record Command (req)
+
+Tue Jun 23 18:21:29 2026
+Start Record Command (req)
+
+Tue Jun 23 18:21:29 2026
+Start Record command : Success
+
+Tue Jun 23 18:21:29 2026
+Start Record command : Success
+
+Tue Jun 23 18:21:29 2026
+Return status : 0
+
+Tue Jun 23 18:22:49 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 18:22:49 2026
+Record stop is done successfully
+
+Tue Jun 23 18:23:25 2026
+stop_record
+
+Tue Jun 23 18:23:25 2026
+No record process is running.
+
+Tue Jun 23 18:24:10 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:24:10 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:24:10 2026
+Return status : 0
+
+Tue Jun 23 18:24:10 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:24:10 2026
+Configure Record command : Success
+
+Tue Jun 23 18:24:10 2026
+Return status : 0
+
+Tue Jun 23 18:24:12 2026
+Start Record Command (req)
+
+Tue Jun 23 18:24:13 2026
+Start Record Command (req)
+
+Tue Jun 23 18:24:13 2026
+Start Record command : Success
+
+Tue Jun 23 18:24:13 2026
+Start Record command : Success
+
+Tue Jun 23 18:24:13 2026
+Return status : 0
+
+Tue Jun 23 18:25:33 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 18:25:33 2026
+Record stop is done successfully
+
+Tue Jun 23 18:26:15 2026
+stop_record
+
+Tue Jun 23 18:26:15 2026
+No record process is running.
+
+Tue Jun 23 18:29:24 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:29:24 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:29:24 2026
+Return status : 0
+
+Tue Jun 23 18:29:24 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:29:24 2026
+Configure Record command : Success
+
+Tue Jun 23 18:29:24 2026
+Return status : 0
+
+Tue Jun 23 18:29:26 2026
+Start Record Command (req)
+
+Tue Jun 23 18:29:27 2026
+Start Record Command (req)
+
+Tue Jun 23 18:29:27 2026
+Start Record command : Success
+
+Tue Jun 23 18:29:27 2026
+Return status : 0
+
+Tue Jun 23 18:29:27 2026
+Start Record command : Success
+
+Tue Jun 23 18:30:47 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 18:30:47 2026
+Record stop is done successfully
+
+Tue Jun 23 18:35:39 2026
+stop_record
+
+Tue Jun 23 18:35:39 2026
+No record process is running.
+
+Tue Jun 23 18:35:41 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:35:41 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:35:41 2026
+Return status : 0
+
+Tue Jun 23 18:35:41 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:35:41 2026
+Configure Record command : Success
+
+Tue Jun 23 18:35:41 2026
+Return status : 0
+
+Tue Jun 23 18:35:43 2026
+Start Record Command (req)
+
+Tue Jun 23 18:35:44 2026
+Start Record Command (req)
+
+Tue Jun 23 18:35:45 2026
+Start Record command : Success
+
+Tue Jun 23 18:35:45 2026
+Return status : 0
+d : Success
+
+Tue Jun 23 18:35:58 2026
+Stop Record Command (req)
+
+Tue Jun 23 18:35:58 2026
+Record stop is done successfully
+
+Tue Jun 23 18:35:58 2026
+Stop Record command : Success
+
+Tue Jun 23 18:36:01 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:36:01 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:36:01 2026
+Return status : 0
+
+Tue Jun 23 18:36:01 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:36:01 2026
+Configure Record command : Success
+
+Tue Jun 23 18:36:01 2026
+Return status : 0
+
+Tue Jun 23 18:36:03 2026
+Start Record Command (req)
+
+Tue Jun 23 18:36:04 2026
+Start Record Command (req)
+
+Tue Jun 23 18:36:05 2026
+Start Record command : Success
+
+Tue Jun 23 18:36:05 2026
+Start Record command : Success
+
+Tue Jun 23 18:36:05 2026
+Return status : 0
+
+Tue Jun 23 18:36:14 2026
+Record is completed
+
+Tue Jun 23 18:36:14 2026
+Record stop is done successfully
+
+Tue Jun 23 18:39:03 2026
+stop_record
+
+Tue Jun 23 18:39:03 2026
+No record process is running.
+
+Tue Jun 23 18:39:07 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:39:07 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:39:07 2026
+Return status : 0
+
+Tue Jun 23 18:39:07 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:39:07 2026
+Configure Record command : Success
+
+Tue Jun 23 18:39:07 2026
+Return status : 0
+
+Tue Jun 23 18:39:09 2026
+Start Record Command (req)
+
+Tue Jun 23 18:39:11 2026
+Start Record Command (req)
+
+Tue Jun 23 18:39:11 2026
+Start Record command : Success
+
+Tue Jun 23 18:39:11 2026
+Return status : 0
+
+Tue Jun 23 18:39:11 2026
+Start Record command : Success
+
+Tue Jun 23 18:40:31 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 18:40:31 2026
+Record stop is done successfully
+
+Tue Jun 23 18:43:44 2026
+stop_record
+
+Tue Jun 23 18:43:44 2026
+No record process is running.
+
+Tue Jun 23 18:43:47 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:43:47 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:43:47 2026
+Return status : 0
+
+Tue Jun 23 18:43:47 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:43:47 2026
+Configure Record command : Success
+
+Tue Jun 23 18:43:47 2026
+Return status : 0
+
+Tue Jun 23 18:43:49 2026
+Start Record Command (req)
+
+Tue Jun 23 18:43:50 2026
+Start Record Command (req)
+
+Tue Jun 23 18:43:51 2026
+Start Record command : Success
+
+Tue Jun 23 18:43:51 2026
+Return status : 0
+
+Tue Jun 23 18:43:51 2026
+Start Record command : Success
+
+Tue Jun 23 18:44:20 2026
+Stop Record Command (req)
+
+Tue Jun 23 18:44:20 2026
+Record stop is done successfully
+
+Tue Jun 23 18:44:20 2026
+Stop Record command : Success
+
+Tue Jun 23 18:44:23 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:44:23 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:44:23 2026
+Return status : 0
+
+Tue Jun 23 18:44:23 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:44:23 2026
+Configure Record command : Success
+
+Tue Jun 23 18:44:23 2026
+Return status : 0
+
+Tue Jun 23 18:44:25 2026
+Start Record Command (req)
+
+Tue Jun 23 18:44:27 2026
+Start Record Command (req)
+
+Tue Jun 23 18:44:27 2026
+Start Record command : Success
+
+Tue Jun 23 18:44:27 2026
+Start Record command : Success
+
+Tue Jun 23 18:44:27 2026
+Return status : 0
+
+Tue Jun 23 18:45:47 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 18:45:47 2026
+Record stop is done successfully
+
+Tue Jun 23 18:47:27 2026
+stop_record
+
+Tue Jun 23 18:47:27 2026
+No record process is running.
+
+Tue Jun 23 18:47:29 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:47:29 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:47:29 2026
+Return status : 0
+
+Tue Jun 23 18:47:29 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:47:29 2026
+Configure Record command : Success
+
+Tue Jun 23 18:47:29 2026
+Return status : 0
+
+Tue Jun 23 18:47:38 2026
+stop_record
+
+Tue Jun 23 18:47:38 2026
+No record process is running.
+
+Tue Jun 23 18:47:42 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:47:42 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:47:42 2026
+Return status : 0
+
+Tue Jun 23 18:47:42 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:47:42 2026
+Configure Record command : Success
+
+Tue Jun 23 18:47:42 2026
+Return status : 0
+
+Tue Jun 23 18:47:59 2026
+stop_record
+
+Tue Jun 23 18:47:59 2026
+No record process is running.
+
+Tue Jun 23 18:48:03 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:48:03 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:48:03 2026
+Return status : 0
+
+Tue Jun 23 18:48:03 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:48:03 2026
+Configure Record command : Success
+
+Tue Jun 23 18:48:03 2026
+Return status : 0
+
+Tue Jun 23 18:48:05 2026
+Start Record Command (req)
+
+Tue Jun 23 18:48:07 2026
+Start Record Command (req)
+
+Tue Jun 23 18:48:07 2026
+Start Record command : Success
+
+Tue Jun 23 18:48:07 2026
+Return status : 0
+
+Tue Jun 23 18:48:07 2026
+Start Record command : Success
+
+Tue Jun 23 18:48:37 2026
+No LVDS data
+
+Tue Jun 23 18:48:37 2026
+Record stop is done successfully
+
+Tue Jun 23 18:49:05 2026
+stop_record
+
+Tue Jun 23 18:49:05 2026
+No record process is running.
+
+Tue Jun 23 18:49:06 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:49:06 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:49:06 2026
+Return status : 0
+
+Tue Jun 23 18:49:07 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:49:07 2026
+Configure Record command : Success
+
+Tue Jun 23 18:49:07 2026
+Return status : 0
+
+Tue Jun 23 18:49:08 2026
+Start Record Command (req)
+
+Tue Jun 23 18:49:10 2026
+Start Record Command (req)
+
+Tue Jun 23 18:49:10 2026
+Start Record command : Success
+
+Tue Jun 23 18:49:10 2026
+Return status : 0
+
+Tue Jun 23 18:49:11 2026
+Start Record command : Success
+
+Tue Jun 23 18:50:30 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 18:50:30 2026
+Record stop is done successfully
+
+Tue Jun 23 18:52:39 2026
+stop_record
+
+Tue Jun 23 18:52:39 2026
+No record process is running.
+
+Tue Jun 23 18:52:41 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:52:41 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:52:41 2026
+Return status : 0
+
+Tue Jun 23 18:52:41 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:52:41 2026
+Configure Record command : Success
+
+Tue Jun 23 18:52:41 2026
+Return status : 0
+
+Tue Jun 23 18:52:52 2026
+stop_record
+
+Tue Jun 23 18:52:52 2026
+No record process is running.
+
+Tue Jun 23 18:54:17 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:54:17 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:54:17 2026
+Return status : 0
+
+Tue Jun 23 18:54:17 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:54:17 2026
+Configure Record command : Success
+
+Tue Jun 23 18:54:17 2026
+Return status : 0
+
+Tue Jun 23 18:54:23 2026
+stop_record
+
+Tue Jun 23 18:54:23 2026
+No record process is running.
+
+Tue Jun 23 18:57:13 2026
+Reset AR Device Command (req)
+
+Tue Jun 23 18:57:13 2026
+Reset AR Device command : Success
+
+Tue Jun 23 18:57:13 2026
+Return status : 0
+
+Tue Jun 23 18:57:14 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:57:14 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:57:14 2026
+Return status : 0
+
+Tue Jun 23 18:57:14 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:57:14 2026
+Configure Record command : Success
+
+Tue Jun 23 18:57:14 2026
+Return status : 0
+
+Tue Jun 23 18:57:16 2026
+Start Record Command (req)
+
+Tue Jun 23 18:57:17 2026
+Start Record Command (req)
+
+Tue Jun 23 18:57:17 2026
+Start Record command : Success
+
+Tue Jun 23 18:57:18 2026
+Return status : 0
+
+Tue Jun 23 18:57:18 2026
+Start Record command : Success
+
+Tue Jun 23 18:57:25 2026
+Stop Record Command (req)
+
+Tue Jun 23 18:57:25 2026
+Record stop is done successfully
+
+Tue Jun 23 18:57:26 2026
+Stop Record command : Success
+
+Tue Jun 23 18:57:27 2026
+Reset AR Device Command (req)
+
+Tue Jun 23 18:57:27 2026
+Reset AR Device command : Success
+
+Tue Jun 23 18:57:27 2026
+Return status : 0
+
+Tue Jun 23 18:57:27 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:57:27 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:57:27 2026
+Return status : 0
+
+Tue Jun 23 18:57:27 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:57:27 2026
+Configure Record command : Success
+
+Tue Jun 23 18:57:27 2026
+Return status : 0
+
+Tue Jun 23 18:57:29 2026
+Start Record Command (req)
+
+Tue Jun 23 18:57:31 2026
+Start Record Command (req)
+
+Tue Jun 23 18:57:31 2026
+Start Record command : Success
+
+Tue Jun 23 18:57:31 2026
+Return status : 0
+
+Tue Jun 23 18:57:31 2026
+Start Record command : Success
+
+Tue Jun 23 18:57:40 2026
+Stop Record Command (req)
+
+Tue Jun 23 18:57:40 2026
+Record stop is done successfully
+
+Tue Jun 23 18:57:40 2026
+Stop Record command : Success
+
+Tue Jun 23 18:57:42 2026
+Reset AR Device Command (req)
+
+Tue Jun 23 18:57:42 2026
+Reset AR Device command : Success
+
+Tue Jun 23 18:57:43 2026
+Return status : 0
+
+Tue Jun 23 18:57:43 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:57:43 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:57:43 2026
+Return status : 0
+
+Tue Jun 23 18:57:43 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:57:43 2026
+Configure Record command : Success
+
+Tue Jun 23 18:57:43 2026
+Return status : 0
+
+Tue Jun 23 18:57:45 2026
+Start Record Command (req)
+
+Tue Jun 23 18:57:46 2026
+Start Record Command (req)
+
+Tue Jun 23 18:57:46 2026
+Start Record command : Success
+
+Tue Jun 23 18:57:46 2026
+Start Record command : Success
+
+Tue Jun 23 18:57:46 2026
+Return status : 0
+
+Tue Jun 23 18:58:16 2026
+No LVDS data
+
+Tue Jun 23 18:58:16 2026
+Record stop is done successfully
+
+Tue Jun 23 18:59:42 2026
+stop_record
+
+Tue Jun 23 18:59:42 2026
+No record process is running.
+
+Tue Jun 23 18:59:44 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 18:59:44 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 18:59:44 2026
+Return status : 0
+
+Tue Jun 23 18:59:44 2026
+Configure Record Command (req)
+
+Tue Jun 23 18:59:44 2026
+Configure Record command : Success
+
+Tue Jun 23 18:59:45 2026
+Return status : 0
+
+Tue Jun 23 18:59:46 2026
+Start Record Command (req)
+
+Tue Jun 23 18:59:48 2026
+Start Record Command (req)
+
+Tue Jun 23 18:59:48 2026
+Start Record command : Success
+
+Tue Jun 23 18:59:48 2026
+Return status : 0
+
+Tue Jun 23 18:59:49 2026
+Start Record command : Success
+
+Tue Jun 23 19:01:08 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 19:01:08 2026
+Record stop is done successfully
+
+Tue Jun 23 19:01:43 2026
+stop_record
+
+Tue Jun 23 19:01:43 2026
+No record process is running.
+
+Tue Jun 23 19:03:20 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:03:20 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:03:20 2026
+Return status : 0
+
+Tue Jun 23 19:03:20 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:03:20 2026
+Configure Record command : Success
+
+Tue Jun 23 19:03:20 2026
+Return status : 0
+
+Tue Jun 23 19:03:22 2026
+Start Record Command (req)
+
+Tue Jun 23 19:03:22 2026
+Start Record command : Success
+
+Tue Jun 23 19:03:22 2026
+Return status : 0
+
+Tue Jun 23 19:03:34 2026
+stop_record
+
+Tue Jun 23 19:03:34 2026
+No record process is running.
+
+Tue Jun 23 19:03:36 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:03:36 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:03:36 2026
+Return status : 0
+
+Tue Jun 23 19:03:36 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:03:36 2026
+Configure Record command : Success
+
+Tue Jun 23 19:03:36 2026
+Return status : 0
+
+Tue Jun 23 19:03:38 2026
+Start Record Command (req)
+
+Tue Jun 23 19:03:38 2026
+Start Record command : Success
+
+Tue Jun 23 19:03:38 2026
+Return status : 0
+
+Tue Jun 23 19:04:58 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 19:04:58 2026
+Record stop is done successfully
+
+Tue Jun 23 19:12:33 2026
+stop_record
+
+Tue Jun 23 19:12:33 2026
+No record process is running.
+
+Tue Jun 23 19:12:35 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:12:35 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:12:35 2026
+Return status : 0
+
+Tue Jun 23 19:12:35 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:12:35 2026
+Configure Record command : Success
+
+Tue Jun 23 19:12:35 2026
+Return status : 0
+
+Tue Jun 23 19:12:37 2026
+Start Record Command (req)
+
+Tue Jun 23 19:12:37 2026
+Start Record command : Success
+
+Tue Jun 23 19:12:37 2026
+Return status : 0
+
+Tue Jun 23 19:12:49 2026
+stop_record
+
+Tue Jun 23 19:12:49 2026
+No record process is running.
+
+Tue Jun 23 19:12:51 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:12:51 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:12:51 2026
+Return status : 0
+
+Tue Jun 23 19:12:51 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:12:51 2026
+Configure Record command : Success
+
+Tue Jun 23 19:12:51 2026
+Return status : 0
+
+Tue Jun 23 19:12:53 2026
+Start Record Command (req)
+
+Tue Jun 23 19:12:53 2026
+Start Record command : Success
+
+Tue Jun 23 19:12:53 2026
+Return status : 0
+
+Tue Jun 23 19:14:13 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 19:14:13 2026
+Record stop is done successfully
+
+Tue Jun 23 19:14:49 2026
+stop_record
+
+Tue Jun 23 19:14:49 2026
+No record process is running.
+
+Tue Jun 23 19:22:04 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:22:04 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:22:04 2026
+Return status : 0
+
+Tue Jun 23 19:22:04 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:22:04 2026
+Configure Record command : Success
+
+Tue Jun 23 19:22:04 2026
+Return status : 0
+
+Tue Jun 23 19:22:06 2026
+Start Record Command (req)
+
+Tue Jun 23 19:22:06 2026
+Start Record command : Success
+
+Tue Jun 23 19:22:06 2026
+Return status : 0
+
+Tue Jun 23 19:23:26 2026
+Record Process : 
+Timeout Error! System disconnected
+
+Tue Jun 23 19:23:26 2026
+Record stop is done successfully
+
+Tue Jun 23 19:23:31 2026
+stop_record
+
+Tue Jun 23 19:23:31 2026
+No record process is running.
+
+Tue Jun 23 19:23:31 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:23:31 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:23:31 2026
+Return status : 0
+
+Tue Jun 23 19:23:31 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:23:31 2026
+Configure Record command : Success
+
+Tue Jun 23 19:23:31 2026
+Return status : 0
+
+Tue Jun 23 19:23:31 2026
+Start Record Command (req)
+
+Tue Jun 23 19:23:31 2026
+Start Record command : Success
+
+Tue Jun 23 19:23:31 2026
+Return status : 0
+
+Tue Jun 23 19:23:36 2026
+stop_record
+
+Tue Jun 23 19:23:36 2026
+No record process is running.
+
+Tue Jun 23 19:23:37 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:23:37 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:23:37 2026
+Return status : 0
+
+Tue Jun 23 19:23:37 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:23:37 2026
+Configure Record command : Success
+
+Tue Jun 23 19:23:37 2026
+Return status : 0
+
+Tue Jun 23 19:23:37 2026
+Start Record Command (req)
+
+Tue Jun 23 19:23:37 2026
+Start Record command : Success
+
+Tue Jun 23 19:23:37 2026
+Return status : 0
+
+Tue Jun 23 19:23:42 2026
+stop_record
+
+Tue Jun 23 19:23:42 2026
+No record process is running.
+
+Tue Jun 23 19:23:42 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:23:42 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:23:42 2026
+Return status : 0
+
+Tue Jun 23 19:23:43 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:23:43 2026
+Configure Record command : Success
+
+Tue Jun 23 19:23:43 2026
+Return status : 0
+
+Tue Jun 23 19:23:43 2026
+Start Record Command (req)
+
+Tue Jun 23 19:23:43 2026
+Start Record command : Success
+
+Tue Jun 23 19:23:43 2026
+Return status : 0
+
+Tue Jun 23 19:23:48 2026
+stop_record
+
+Tue Jun 23 19:23:48 2026
+No record process is running.
+
+Tue Jun 23 19:23:48 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:23:48 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:23:48 2026
+Return status : 0
+
+Tue Jun 23 19:23:48 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:23:48 2026
+Configure Record command : Success
+
+Tue Jun 23 19:23:48 2026
+Return status : 0
+
+Tue Jun 23 19:23:48 2026
+Start Record Command (req)
+
+Tue Jun 23 19:23:48 2026
+Start Record command : Success
+
+Tue Jun 23 19:23:48 2026
+Return status : 0
+
+Tue Jun 23 19:23:53 2026
+stop_record
+
+Tue Jun 23 19:23:53 2026
+No record process is running.
+
+Tue Jun 23 19:23:54 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:23:54 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:23:54 2026
+Return status : 0
+
+Tue Jun 23 19:23:54 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:23:54 2026
+Configure Record command : Success
+
+Tue Jun 23 19:23:54 2026
+Return status : 0
+
+Tue Jun 23 19:23:54 2026
+Start Record Command (req)
+
+Tue Jun 23 19:23:54 2026
+Start Record command : Success
+
+Tue Jun 23 19:23:54 2026
+Return status : 0
+
+Tue Jun 23 19:23:59 2026
+stop_record
+
+Tue Jun 23 19:23:59 2026
+No record process is running.
+
+Tue Jun 23 19:23:59 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:23:59 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:23:59 2026
+Return status : 0
+
+Tue Jun 23 19:24:00 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:00 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:00 2026
+Return status : 0
+
+Tue Jun 23 19:24:00 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:00 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:00 2026
+Return status : 0
+
+Tue Jun 23 19:24:01 2026
+No LVDS data
+
+Tue Jun 23 19:24:01 2026
+Record stop is done successfully
+
+Tue Jun 23 19:24:05 2026
+stop_record
+
+Tue Jun 23 19:24:05 2026
+No record process is running.
+
+Tue Jun 23 19:24:05 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:24:05 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:24:05 2026
+Return status : 0
+
+Tue Jun 23 19:24:05 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:05 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:05 2026
+Return status : 0
+
+Tue Jun 23 19:24:05 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:05 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:05 2026
+Return status : 0
+
+Tue Jun 23 19:24:10 2026
+stop_record
+
+Tue Jun 23 19:24:10 2026
+No record process is running.
+
+Tue Jun 23 19:24:11 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:24:11 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:24:11 2026
+Return status : 0
+
+Tue Jun 23 19:24:11 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:11 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:11 2026
+Return status : 0
+
+Tue Jun 23 19:24:11 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:11 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:11 2026
+Return status : 0
+
+Tue Jun 23 19:24:16 2026
+stop_record
+
+Tue Jun 23 19:24:16 2026
+No record process is running.
+
+Tue Jun 23 19:24:16 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:24:16 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:24:16 2026
+Return status : 0
+
+Tue Jun 23 19:24:17 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:17 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:17 2026
+Return status : 0
+
+Tue Jun 23 19:24:17 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:17 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:17 2026
+Return status : 0
+
+Tue Jun 23 19:24:22 2026
+stop_record
+
+Tue Jun 23 19:24:22 2026
+No record process is running.
+
+Tue Jun 23 19:24:22 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:24:22 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:24:22 2026
+Return status : 0
+
+Tue Jun 23 19:24:22 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:22 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:22 2026
+Return status : 0
+
+Tue Jun 23 19:24:22 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:22 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:22 2026
+Return status : 0
+
+Tue Jun 23 19:24:27 2026
+stop_record
+
+Tue Jun 23 19:24:27 2026
+No record process is running.
+
+Tue Jun 23 19:24:28 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:24:28 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:24:28 2026
+Return status : 0
+
+Tue Jun 23 19:24:28 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:28 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:28 2026
+Return status : 0
+
+Tue Jun 23 19:24:28 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:28 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:28 2026
+Return status : 0
+
+Tue Jun 23 19:24:33 2026
+stop_record
+
+Tue Jun 23 19:24:33 2026
+No record process is running.
+
+Tue Jun 23 19:24:33 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:24:33 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:24:33 2026
+Return status : 0
+
+Tue Jun 23 19:24:34 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:34 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:34 2026
+Return status : 0
+
+Tue Jun 23 19:24:34 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:34 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:34 2026
+Return status : 0
+
+Tue Jun 23 19:24:35 2026
+No LVDS data
+
+Tue Jun 23 19:24:35 2026
+Record stop is done successfully
+
+Tue Jun 23 19:24:39 2026
+stop_record
+
+Tue Jun 23 19:24:39 2026
+No record process is running.
+
+Tue Jun 23 19:24:39 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:24:39 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:24:39 2026
+Return status : 0
+
+Tue Jun 23 19:24:39 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:24:39 2026
+Configure Record command : Success
+
+Tue Jun 23 19:24:39 2026
+Return status : 0
+
+Tue Jun 23 19:24:39 2026
+Start Record Command (req)
+
+Tue Jun 23 19:24:39 2026
+Start Record command : Success
+
+Tue Jun 23 19:24:39 2026
+Return status : 0
+
+Tue Jun 23 19:24:43 2026
+stop_record
+
+Tue Jun 23 19:24:43 2026
+No record process is running.
+
+Tue Jun 23 19:25:02 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:25:02 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:25:02 2026
+Return status : 0
+
+Tue Jun 23 19:25:02 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:25:02 2026
+Configure Record command : Success
+
+Tue Jun 23 19:25:02 2026
+Return status : 0
+
+Tue Jun 23 19:25:04 2026
+Start Record Command (req)
+
+Tue Jun 23 19:25:04 2026
+Start Record command : Success
+
+Tue Jun 23 19:25:04 2026
+Return status : 0
+
+Tue Jun 23 19:26:21 2026
+stop_record
+
+Tue Jun 23 19:26:21 2026
+No record process is running.
+
+Tue Jun 23 19:26:21 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:26:21 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:26:21 2026
+Return status : 0
+
+Tue Jun 23 19:26:21 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:26:21 2026
+Configure Record command : Success
+
+Tue Jun 23 19:26:21 2026
+Return status : 0
+
+Tue Jun 23 19:26:21 2026
+Start Record Command (req)
+
+Tue Jun 23 19:26:21 2026
+Start Record command : Success
+
+Tue Jun 23 19:26:21 2026
+Return status : 0
+
+Tue Jun 23 19:26:22 2026
+Record is completed
+
+Tue Jun 23 19:26:22 2026
+Record stop is done successfully
+
+Tue Jun 23 19:26:27 2026
+stop_record
+
+Tue Jun 23 19:26:28 2026
+No record process is running.
+
+Tue Jun 23 19:26:28 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:26:28 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:26:28 2026
+Return status : 0
+
+Tue Jun 23 19:26:28 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:26:28 2026
+Configure Record command : Success
+
+Tue Jun 23 19:26:28 2026
+Return status : 0
+
+Tue Jun 23 19:26:28 2026
+Start Record Command (req)
+
+Tue Jun 23 19:26:28 2026
+Start Record command : Success
+
+Tue Jun 23 19:26:28 2026
+Return status : 0
+
+Tue Jun 23 19:27:47 2026
+stop_record
+
+Tue Jun 23 19:27:47 2026
+No record process is running.
+
+Tue Jun 23 19:27:47 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:27:47 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:27:47 2026
+Return status : 0
+
+Tue Jun 23 19:27:47 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:27:47 2026
+Configure Record command : Success
+
+Tue Jun 23 19:27:47 2026
+Return status : 0
+
+Tue Jun 23 19:27:48 2026
+Start Record Command (req)
+
+Tue Jun 23 19:27:48 2026
+Start Record command : Success
+
+Tue Jun 23 19:27:48 2026
+Return status : 0
+
+Tue Jun 23 19:27:49 2026
+Record is completed
+
+Tue Jun 23 19:27:49 2026
+Record is completed
+
+Tue Jun 23 19:27:49 2026
+Record stop is done successfully
+
+Tue Jun 23 19:27:54 2026
+stop_record
+
+Tue Jun 23 19:27:54 2026
+No record process is running.
+
+Tue Jun 23 19:27:54 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:27:54 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:27:54 2026
+Return status : 0
+
+Tue Jun 23 19:27:54 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:27:54 2026
+Configure Record command : Success
+
+Tue Jun 23 19:27:54 2026
+Return status : 0
+
+Tue Jun 23 19:27:54 2026
+Start Record Command (req)
+
+Tue Jun 23 19:27:55 2026
+Start Record command : Success
+
+Tue Jun 23 19:27:55 2026
+Return status : 0
+
+Tue Jun 23 19:29:14 2026
+stop_record
+
+Tue Jun 23 19:29:14 2026
+No record process is running.
+
+Tue Jun 23 19:29:15 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:29:15 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:29:15 2026
+Return status : 0
+
+Tue Jun 23 19:29:15 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:29:15 2026
+Configure Record command : Success
+
+Tue Jun 23 19:29:15 2026
+Return status : 0
+
+Tue Jun 23 19:29:15 2026
+Start Record Command (req)
+
+Tue Jun 23 19:29:15 2026
+Start Record command : Success
+
+Tue Jun 23 19:29:15 2026
+Return status : 0
+
+Tue Jun 23 19:29:16 2026
+Record is completed
+
+Tue Jun 23 19:29:16 2026
+Record stop is done successfully
+
+Tue Jun 23 19:29:21 2026
+stop_record
+
+Tue Jun 23 19:29:21 2026
+No record process is running.
+
+Tue Jun 23 19:29:22 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:29:22 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:29:22 2026
+Return status : 0
+
+Tue Jun 23 19:29:22 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:29:22 2026
+Configure Record command : Success
+
+Tue Jun 23 19:29:22 2026
+Return status : 0
+
+Tue Jun 23 19:29:22 2026
+Start Record Command (req)
+
+Tue Jun 23 19:29:22 2026
+Start Record command : Success
+
+Tue Jun 23 19:29:22 2026
+Return status : 0
+
+Tue Jun 23 19:30:41 2026
+stop_record
+
+Tue Jun 23 19:30:41 2026
+No record process is running.
+
+Tue Jun 23 19:30:41 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:30:41 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:30:41 2026
+Return status : 0
+
+Tue Jun 23 19:30:41 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:30:41 2026
+Configure Record command : Success
+
+Tue Jun 23 19:30:41 2026
+Return status : 0
+
+Tue Jun 23 19:30:41 2026
+Start Record Command (req)
+
+Tue Jun 23 19:30:41 2026
+Start Record command : Success
+
+Tue Jun 23 19:30:41 2026
+Return status : 0
+
+Tue Jun 23 19:30:43 2026
+Record is completed
+
+Tue Jun 23 19:30:43 2026
+Record stop is done successfully
+
+Tue Jun 23 19:30:48 2026
+stop_record
+
+Tue Jun 23 19:30:48 2026
+No record process is running.
+
+Tue Jun 23 19:30:48 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:30:48 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:30:48 2026
+Return status : 0
+
+Tue Jun 23 19:30:48 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:30:48 2026
+Configure Record command : Success
+
+Tue Jun 23 19:30:48 2026
+Return status : 0
+
+Tue Jun 23 19:30:48 2026
+Start Record Command (req)
+
+Tue Jun 23 19:30:48 2026
+Start Record command : Success
+
+Tue Jun 23 19:30:48 2026
+Return status : 0
+
+Tue Jun 23 19:32:06 2026
+stop_record
+
+Tue Jun 23 19:32:06 2026
+No record process is running.
+
+Tue Jun 23 19:32:06 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:32:06 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:32:06 2026
+Return status : 0
+
+Tue Jun 23 19:32:07 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:32:07 2026
+Configure Record command : Success
+
+Tue Jun 23 19:32:07 2026
+Return status : 0
+
+Tue Jun 23 19:32:07 2026
+Start Record Command (req)
+
+Tue Jun 23 19:32:07 2026
+Start Record command : Success
+
+Tue Jun 23 19:32:07 2026
+Return status : 0
+
+Tue Jun 23 19:32:08 2026
+Record is completed
+
+Tue Jun 23 19:32:08 2026
+Record stop is done successfully
+
+Tue Jun 23 19:32:13 2026
+stop_record
+
+Tue Jun 23 19:32:13 2026
+No record process is running.
+
+Tue Jun 23 19:32:13 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:32:13 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:32:13 2026
+Return status : 0
+
+Tue Jun 23 19:32:14 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:32:14 2026
+Configure Record command : Success
+
+Tue Jun 23 19:32:14 2026
+Return status : 0
+
+Tue Jun 23 19:32:14 2026
+Start Record Command (req)
+
+Tue Jun 23 19:32:14 2026
+Start Record command : Success
+
+Tue Jun 23 19:32:14 2026
+Return status : 0
+
+Tue Jun 23 19:32:50 2026
+stop_record
+
+Tue Jun 23 19:32:50 2026
+No record process is running.
+
+Tue Jun 23 19:32:53 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:32:53 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:32:53 2026
+Return status : 0
+
+Tue Jun 23 19:32:53 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:32:53 2026
+Configure Record command : Success
+
+Tue Jun 23 19:32:53 2026
+Return status : 0
+
+Tue Jun 23 19:32:55 2026
+Start Record Command (req)
+
+Tue Jun 23 19:32:55 2026
+Start Record command : Success
+
+Tue Jun 23 19:32:55 2026
+Return status : 0
+
+Tue Jun 23 19:34:14 2026
+stop_record
+
+Tue Jun 23 19:34:14 2026
+No record process is running.
+
+Tue Jun 23 19:34:14 2026
+Start Record Command (req)
+
+Tue Jun 23 19:34:14 2026
+Start Record command : Success
+
+Tue Jun 23 19:34:14 2026
+Return status : 0
+
+Tue Jun 23 19:34:16 2026
+Record is completed
+
+Tue Jun 23 19:34:16 2026
+Record stop is done successfully
+
+Tue Jun 23 19:34:21 2026
+stop_record
+
+Tue Jun 23 19:34:21 2026
+No record process is running.
+
+Tue Jun 23 19:34:21 2026
+Start Record Command (req)
+
+Tue Jun 23 19:34:21 2026
+Start Record command : Success
+
+Tue Jun 23 19:34:21 2026
+Return status : 0
+
+Tue Jun 23 19:35:40 2026
+stop_record
+
+Tue Jun 23 19:35:40 2026
+No record process is running.
+
+Tue Jun 23 19:35:40 2026
+Start Record Command (req)
+
+Tue Jun 23 19:35:40 2026
+Start Record command : Success
+
+Tue Jun 23 19:35:40 2026
+Return status : 0
+
+Tue Jun 23 19:35:42 2026
+Record is completed
+
+Tue Jun 23 19:35:42 2026
+Record stop is done successfully
+
+Tue Jun 23 19:35:47 2026
+stop_record
+
+Tue Jun 23 19:35:47 2026
+No record process is running.
+
+Tue Jun 23 19:35:47 2026
+Start Record Command (req)
+
+Tue Jun 23 19:35:47 2026
+Start Record command : Success
+
+Tue Jun 23 19:35:47 2026
+Return status : 0
+
+Tue Jun 23 19:37:05 2026
+stop_record
+
+Tue Jun 23 19:37:05 2026
+No record process is running.
+
+Tue Jun 23 19:37:06 2026
+Start Record Command (req)
+
+Tue Jun 23 19:37:06 2026
+Start Record command : Success
+
+Tue Jun 23 19:37:06 2026
+Return status : 0
+
+Tue Jun 23 19:37:07 2026
+Record is completed
+
+Tue Jun 23 19:37:07 2026
+Record stop is done successfully
+
+Tue Jun 23 19:37:12 2026
+stop_record
+
+Tue Jun 23 19:37:12 2026
+No record process is running.
+
+Tue Jun 23 19:37:13 2026
+Start Record Command (req)
+
+Tue Jun 23 19:37:13 2026
+Start Record command : Success
+
+Tue Jun 23 19:37:13 2026
+Return status : 0
+
+Tue Jun 23 19:37:35 2026
+stop_record
+
+Tue Jun 23 19:37:35 2026
+No record process is running.
+
+Tue Jun 23 19:37:36 2026
+FPGA Configuration Command (req)
+
+Tue Jun 23 19:37:36 2026
+FPGA Configuration command : Success
+
+Tue Jun 23 19:37:36 2026
+Return status : 0
+
+Tue Jun 23 19:37:36 2026
+Configure Record Command (req)
+
+Tue Jun 23 19:37:36 2026
+Configure Record command : Success
+
+Tue Jun 23 19:37:36 2026
+Return status : 0
+
+Tue Jun 23 19:37:38 2026
+Start Record Command (req)
+
+Tue Jun 23 19:37:38 2026
+Start Record command : Success
+
+Tue Jun 23 19:37:38 2026
+Return status : 0
+
+Tue Jun 23 19:38:58 2026
+stop_record
+
+Tue Jun 23 19:38:58 2026
+No record process is running.
+
+Tue Jun 23 19:38:59 2026
+Start Record Command (req)
+
+Tue Jun 23 19:38:59 2026
+Start Record command : Success
+
+Tue Jun 23 19:38:59 2026
+Return status : 0
+
+Tue Jun 23 19:39:00 2026
+Record is completed
+
+Tue Jun 23 19:39:00 2026
+Record stop is done successfully
+
+Tue Jun 23 19:39:01 2026
+stop_record
+
+Tue Jun 23 19:39:01 2026
+No record process is running.
+
+Tue Jun 23 19:39:01 2026
+Start Record Command (req)
+
+Tue Jun 23 19:39:01 2026
+Start Record command : Success
+
+Tue Jun 23 19:39:01 2026
+Return status : 0
+
+Tue Jun 23 19:40:19 2026
+stop_record
+
+Tue Jun 23 19:40:19 2026
+No record process is running.
+
+Tue Jun 23 19:40:20 2026
+Start Record Command (req)
+
+Tue Jun 23 19:40:20 2026
+Start Record command : Success
+
+Tue Jun 23 19:40:20 2026
+Return status : 0
+
+Tue Jun 23 19:40:21 2026
+Record is completed
+
+Tue Jun 23 19:40:21 2026
+Record stop is done successfully
+
+Tue Jun 23 19:40:22 2026
+stop_record
+
+Tue Jun 23 19:40:22 2026
+No record process is running.
+
+Tue Jun 23 19:40:22 2026
+Start Record Command (req)
+
+Tue Jun 23 19:40:22 2026
+Start Record command : Success
+
+Tue Jun 23 19:40:22 2026
+Return status : 0
+
+Tue Jun 23 19:41:40 2026
+stop_record
+
+Tue Jun 23 19:41:40 2026
+No record process is running.
+
+Tue Jun 23 19:41:40 2026
+Start Record Command (req)
+
+Tue Jun 23 19:41:40 2026
+Start Record command : Success
+
+Tue Jun 23 19:41:40 2026
+Return status : 0
+
+Tue Jun 23 19:41:42 2026
+Record is completed
+
+Tue Jun 23 19:41:42 2026
+Record stop is done successfully
+
+Tue Jun 23 19:41:42 2026
+stop_record
+
+Tue Jun 23 19:41:42 2026
+No record process is running.
+
+Tue Jun 23 19:41:43 2026
+Start Record Command (req)
+
+Tue Jun 23 19:41:43 2026
+Start Record command : Success
+
+Tue Jun 23 19:41:43 2026
+Return status : 0
+
+Tue Jun 23 19:41:48 2026
+stop_record
+
+Tue Jun 23 19:41:48 2026
+No record process is running.
