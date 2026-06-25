@@ -1,0 +1,4 @@
+cliComPortNum	12
+deviceMode	2
+configFileName	C:\radar_toolbox_GIT\radar_toolbox_03042024\radar_toolbox\tools\Adc_Data_Capture_Tool_DCA1000_CLI\chirp_configs\xWR6843_presenceDetection.cfg
+adcFileName	.\data\test_6843.bin

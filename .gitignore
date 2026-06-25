@@ -1,0 +1,35 @@
+# IDE / 툴 설정
+.claude/
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# 모델 파일
+models/
+*.pt
+*.safetensors
+*.gguf
+
+# DCA1000 바이너리 (TI 공식 배포)
+tools/dca1000/*.exe
+tools/dca1000/*.dll
+tools/dca1000/*.bit
+tools/dca1000/output/
+tools/dca1000/data/
+tools/dca1000/gui/
+tools/dca1000/prebuilt_binaries/
+tools/dca1000/docs/
+tools/dca1000/CLI_LogFile.txt
+
+# 임시/출력 파일
+*.bin
+*.csv
+tmp_*.png
+tmp_*.jpg
+background2.jpg
+depth.png
+mask.png

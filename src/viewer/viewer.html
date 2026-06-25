@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>RadYOLO 3D Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; overflow: hidden; }
+    canvas { display: block; }
+    #info {
+      position: fixed; top: 12px; left: 12px;
+      color: #aaa; font: 13px monospace;
+      pointer-events: none;
+    }
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font: 18px monospace; background: #111;
+    }
+  </style>
+</head>
+<body>
+<div id="loading">로딩 중...</div>
+<div id="info">마우스 드래그: 회전 | 스크롤: 줌 | 우클릭 드래그: 이동</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.001, 100);
+camera.position.set(0, 0, 2.5);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, 0);
+
+function getImageData(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width;
+      c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      resolve({ data: c.getContext('2d').getImageData(0, 0, img.width, img.height), w: img.width, h: img.height });
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function build() {
+  const hasMask = await fetch('mask.png', { method: 'HEAD' }).then(r => r.ok).catch(() => false);
+  const loads = [getImageData('test.jpg'), getImageData('depth.png')];
+  if (hasMask) loads.push(getImageData('mask.png'));
+  const [color, depth, maskImg] = await Promise.all(loads);
+
+  const W = color.w, H = color.h;
+  const STEP = 3;            // 샘플링 간격 (메쉬는 포인트보다 촘촘할 필요 없음)
+  const DEPTH_SCALE = 1.2;
+  const ASPECT = W / H;
+  const EDGE_THRESHOLD = 0.12;  // 이 이상 깊이 차이나면 삼각형 안 이음
+
+  const cols = Math.floor(W / STEP);
+  const rows = Math.floor(H / STEP);
+
+  const positions = new Float32Array(cols * rows * 3);
+  const colors    = new Float32Array(cols * rows * 3);
+  const masked    = new Uint8Array(cols * rows);   // 마스크 여부 캐시
+  const dvals     = new Float32Array(cols * rows); // 깊이값 캐시
+
+  // 정점 생성
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const px = c * STEP;
+      const py = r * STEP;
+      const pi = (py * W + px) * 4;
+      const i  = r * cols + c;
+
+      const d = depth.data.data[pi] / 255;
+      dvals[i] = d;
+      masked[i] = maskImg && maskImg.data.data[pi] > 128 ? 1 : 0;
+
+      positions[i*3]   = (c / cols - 0.5) * ASPECT;
+      positions[i*3+1] = -(r / rows - 0.5);
+      positions[i*3+2] = masked[i] ? 0 : (d - 0.5) * DEPTH_SCALE;
+
+      colors[i*3]   = color.data.data[pi]   / 255;
+      colors[i*3+1] = color.data.data[pi+1] / 255;
+      colors[i*3+2] = color.data.data[pi+2] / 255;
+    }
+  }
+
+  // 삼각형 인덱스 생성
+  const indexList = [];
+  for (let r = 0; r < rows - 1; r++) {
+    for (let c = 0; c < cols - 1; c++) {
+      const tl = r * cols + c;
+      const tr = tl + 1;
+      const bl = tl + cols;
+      const br = bl + 1;
+
+      // 마스크된 정점이 하나라도 있으면 스킵
+      if (masked[tl] || masked[tr] || masked[bl] || masked[br]) continue;
+
+      // 깊이 불연속(엣지) 체크
+      const dTL = dvals[tl], dTR = dvals[tr];
+      const dBL = dvals[bl], dBR = dvals[br];
+      const maxDiff = Math.max(
+        Math.abs(dTL - dTR), Math.abs(dTL - dBL),
+        Math.abs(dTR - dBR), Math.abs(dBL - dBR)
+      );
+      if (maxDiff > EDGE_THRESHOLD) continue;
+
+      // 쿼드 → 삼각형 2개
+      indexList.push(tl, bl, tr);
+      indexList.push(tr, bl, br);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors, 3));
+  geo.setIndex(indexList);
+  geo.computeVertexNormals();
+
+  const mat = new THREE.MeshBasicMaterial({
+    vertexColors: true,
+    side: THREE.DoubleSide,
+  });
+
+  scene.add(new THREE.Mesh(geo, mat));
+  document.getElementById('loading').style.display = 'none';
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+build().catch(e => {
+  document.getElementById('loading').textContent = '로드 실패: ' + e.message;
+});
+animate();
+</script>
+</body>
+</html>
