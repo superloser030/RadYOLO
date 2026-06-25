@@ -204,29 +204,39 @@ def webcam_send():
 
 
 if __name__ == "__main__":
-    dca_cli("fpga")
-    dca_cli("record")
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("mode", type=int, choices=[0, 1],
+                        help="0: 웹캠만  1: 레이더 + 웹캠")
+    args = parser.parse_args()
 
-    send_radar_config()
+    threads = []
 
-    start_record_with_monitor()
+    if args.mode == 1:
+        dca_cli("fpga")
+        dca_cli("record")
+        send_radar_config()
+        start_record_with_monitor()
+        threads.append(threading.Thread(target=radar_forward, daemon=True))
 
-    t1 = threading.Thread(target=radar_forward, daemon=True)
-    t2 = threading.Thread(target=webcam_send, daemon=True)
-    t1.start()
-    t2.start()
+    threads.append(threading.Thread(target=webcam_send, daemon=True))
 
-    print("실행 중. Ctrl+C로 종료.")
+    for t in threads:
+        t.start()
+
+    mode_str = "웹캠만" if args.mode == 0 else "레이더 + 웹캠"
+    print(f"실행 중 [{mode_str}]. Ctrl+C로 종료.")
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n종료 중...")
-        with record_proc_lock:
-            if current_record_proc is not None:
-                current_record_proc.terminate()
-        try:
-            dca_cli("stop_record")
-        except RuntimeError:
-            pass
+        if args.mode == 1:
+            with record_proc_lock:
+                if current_record_proc is not None:
+                    current_record_proc.terminate()
+            try:
+                dca_cli("stop_record")
+            except RuntimeError:
+                pass
         print("종료.")
