@@ -1,10 +1,10 @@
 import sys
 sys.path.insert(0, "src/transmission")
 
-from receiver import radar_receive, webcam_receive
 import threading
 import time
-import cv2
+import receiver
+from receiver import radar_receive, webcam_receive
 
 if __name__ == "__main__":
     t1 = threading.Thread(target=radar_receive, daemon=True)
@@ -14,8 +14,12 @@ if __name__ == "__main__":
     t2.start()
 
     try:
-        while True:
+        while not receiver.shutdown_event.is_set():
             time.sleep(0.1)
     except KeyboardInterrupt:
-        cv2.destroyAllWindows()
-        print("종료.")
+        print("\n종료 중...")
+        receiver.shutdown_event.set()
+
+    t1.join(timeout=2)
+    t2.join(timeout=2)
+    print("종료.")
