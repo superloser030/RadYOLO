@@ -4,6 +4,7 @@ import threading
 import struct
 import time
 import datetime
+import json
 import subprocess
 import serial
 import os
@@ -18,6 +19,13 @@ DCA_DATA_IP   = "192.168.33.30"
 DCA_DATA_PORT = 4098
 
 PROJECT_ROOT   = Path(__file__).resolve().parent.parent.parent
+
+
+def load_config():
+    path = PROJECT_ROOT / "config" / "sender.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    return {"webcam_fps": 10, "webcam_quality": 20, "radar_frame_period_ms": 1000}
 DCA_ROOT       = PROJECT_ROOT / "tools" / "dca1000"
 CLI_EXE        = DCA_ROOT / "DCA1000EVM_CLI_Control.exe"
 CLI_RECORD_EXE = DCA_ROOT / "DCA1000EVM_CLI_Record.exe"
@@ -83,16 +91,20 @@ def uart_send_commands(commands):
             print(f"  Send: {command:<30} | {response.strip()}")
 
 
-def send_radar_config():
+def send_radar_config(frame_period_ms=1000):
     print(f"[UART] {CLI_PORT} 연결 중...")
     with serial.Serial(CLI_PORT, CLI_BAUD, timeout=1) as ser:
-        print(f"[UART] 연결 완료. .cfg 전송 시작...")
+        print(f"[UART] 연결 완료. .cfg 전송 시작... (frame period: {frame_period_ms}ms)")
         with open(RADAR_CFG, 'r') as f:
             lines = f.readlines()
         for line in lines:
             command = line.strip()
             if command.startswith('%') or not command:
                 continue
+            if command.startswith('frameCfg'):
+                parts = command.split()
+                parts[5] = str(frame_period_ms)
+                command = ' '.join(parts)
             ser.write((command + '\r\n').encode('utf-8'))
             time.sleep(0.05)
             response = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
@@ -176,7 +188,7 @@ def radar_forward():
         fwd_sock.close()
 
 
-def webcam_send():
+def webcam_send(fps=10, quality=20):
     cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -187,7 +199,8 @@ def webcam_send():
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     frame_id = 0
-    print(f"[Webcam] 전송 시작 → {DESKTOP_IP}:{WEBCAM_PORT}")
+    interval = 1 / fps
+    print(f"[Webcam] 전송 시작 → {DESKTOP_IP}:{WEBCAM_PORT}  ({fps}fps, quality={quality})")
 
     while True:
         ret, frame = cap.read()
@@ -195,7 +208,7 @@ def webcam_send():
             time.sleep(0.01)
             continue
 
-        _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 20])
+        _, buf = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, quality])
         data = buf.tobytes()
 
         chunks = [data[i:i+CHUNK_SIZE] for i in range(0, len(data), CHUNK_SIZE)]
@@ -207,7 +220,7 @@ def webcam_send():
             sock.sendto(header + chunk, (DESKTOP_IP, WEBCAM_PORT))
 
         frame_id += 1
-        time.sleep(1 / 10)
+        time.sleep(interval)
 
     cap.release()
 
@@ -219,16 +232,21 @@ if __name__ == "__main__":
                         help="0: 웹캠만  1: 레이더 + 웹캠")
     args = parser.parse_args()
 
+    cfg = load_config()
+    print(f"[Config] webcam {cfg['webcam_fps']}fps / quality {cfg['webcam_quality']} / radar {cfg['radar_frame_period_ms']}ms")
+
     threads = []
 
     if args.mode == 1:
         dca_cli("fpga")
         dca_cli("record")
-        send_radar_config()
+        send_radar_config(frame_period_ms=cfg["radar_frame_period_ms"])
         start_record_with_monitor()
         threads.append(threading.Thread(target=radar_forward, daemon=True))
 
-    threads.append(threading.Thread(target=webcam_send, daemon=True))
+    threads.append(threading.Thread(target=webcam_send,
+                                    args=(cfg["webcam_fps"], cfg["webcam_quality"]),
+                                    daemon=True))
 
     for t in threads:
         t.start()
