@@ -35,7 +35,7 @@ RADAR_CFG      = DCA_ROOT / "config" / "awr1642_raw_data.cfg"
 CLI_PORT = "COM3"
 CLI_BAUD = 115200
 
-RESTART_AT_SEQ = 6900
+RESTART_AT_SEQ = 70000
 
 
 def _ts_ms():
