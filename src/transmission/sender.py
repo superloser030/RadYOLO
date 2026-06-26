@@ -3,6 +3,7 @@ import cv2
 import threading
 import struct
 import time
+import datetime
 import subprocess
 import serial
 import os
@@ -27,6 +28,13 @@ CLI_PORT = "COM3"
 CLI_BAUD = 115200
 
 RESTART_AT_SEQ = 6900
+
+
+def _ts_ms():
+    """자정 기준 밀리초 (uint32, 4바이트)."""
+    n = datetime.datetime.now()
+    return (n.hour * 3600 + n.minute * 60 + n.second) * 1000 + n.microsecond // 1000
+
 
 record_proc_lock = threading.Lock()
 current_record_proc = None
@@ -150,7 +158,7 @@ def radar_forward():
             except socket.timeout:
                 continue
 
-            header = struct.pack('>I', seq)
+            header = struct.pack('>II', seq, _ts_ms())
             fwd_sock.sendto(header + chunk, (DESKTOP_IP, RADAR_PORT))
             print(f"[Radar] seq={seq:>6}  size={len(chunk):>5}B  {chunk[:16].hex()}")
             seq += 1
@@ -193,8 +201,9 @@ def webcam_send():
         chunks = [data[i:i+CHUNK_SIZE] for i in range(0, len(data), CHUNK_SIZE)]
         total = len(chunks)
 
+        ts = _ts_ms()
         for i, chunk in enumerate(chunks):
-            header = struct.pack('>IHH', frame_id % 65536, i, total)
+            header = struct.pack('>IHHI', frame_id % 65536, i, total, ts)
             sock.sendto(header + chunk, (DESKTOP_IP, WEBCAM_PORT))
 
         frame_id += 1

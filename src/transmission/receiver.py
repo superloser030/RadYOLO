@@ -10,16 +10,40 @@ import time
 RADAR_PORT  = 5006
 WEBCAM_PORT = 5007
 
-shutdown_event    = threading.Event()
-frame_queue       = queue.Queue(maxsize=30)  # bg_select 등에서 읽는 프레임 큐
-_latest_frame     = None
+shutdown_event     = threading.Event()
+frame_queue        = queue.Queue(maxsize=30)
+_latest_frame      = None
+_latest_frame_ts   = 0   # ms since midnight (sender 기준)
 _latest_frame_lock = threading.Lock()
+
+_latest_radar      = None   # (payload_bytes, ts_ms)
+_latest_radar_lock = threading.Lock()
+
+
+def _ms_to_timestr(ms: int) -> str:
+    h   = ms // 3600000
+    m   = (ms % 3600000) // 60000
+    s   = (ms % 60000)   // 1000
+    ms3 = ms % 1000
+    return f"{h:02d}:{m:02d}:{s:02d}.{ms3:03d}"
 
 
 def get_latest_frame():
     """라이브 루프용: 가장 최근 수신 프레임 반환 (None이면 아직 수신 안됨)"""
     with _latest_frame_lock:
         return _latest_frame
+
+
+def get_latest_frame_ts() -> int:
+    """가장 최근 웹캠 프레임의 타임스탬프 (ms since midnight, sender 시계 기준)"""
+    with _latest_frame_lock:
+        return _latest_frame_ts
+
+
+def get_latest_radar():
+    """가장 최근 레이더 패킷: (payload_bytes, ts_ms) 또는 None"""
+    with _latest_radar_lock:
+        return _latest_radar
 
 
 def radar_receive():
@@ -38,9 +62,15 @@ def radar_receive():
         except socket.timeout:
             continue
 
-        seq = struct.unpack('>I', data[:4])[0]
-        payload = data[4:]
-        print(f"[Radar] seq={seq:>6}  size={len(payload):>5}B  {payload[:16].hex()}")
+        hdr_size = struct.calcsize('>II')
+        seq, ts_ms = struct.unpack('>II', data[:hdr_size])
+        payload = data[hdr_size:]
+
+        global _latest_radar
+        with _latest_radar_lock:
+            _latest_radar = (payload, ts_ms)
+
+        print(f"[Radar] seq={seq:>6}  {_ms_to_timestr(ts_ms)}  size={len(payload):>5}B  {payload[:16].hex()}")
         count += 1
         total_bytes += len(data)
 
@@ -58,7 +88,8 @@ def webcam_receive():
     sock.settimeout(0.5)
     print(f"[Webcam] 수신 대기 중 0.0.0.0:{WEBCAM_PORT}")
 
-    frames = defaultdict(dict)
+    frames    = defaultdict(dict)
+    frame_ts  = {}   # frame_id → ts_ms
 
     while not shutdown_event.is_set():
         try:
@@ -66,23 +97,27 @@ def webcam_receive():
         except socket.timeout:
             continue
 
-        hdr_size = struct.calcsize('>IHH')
-        frame_id, chunk_id, total = struct.unpack('>IHH', data[:hdr_size])
+        hdr_size = struct.calcsize('>IHHI')
+        frame_id, chunk_id, total, ts_ms = struct.unpack('>IHHI', data[:hdr_size])
         frames[frame_id][chunk_id] = data[hdr_size:]
+        frame_ts[frame_id] = ts_ms
 
         if len(frames[frame_id]) == total:
             frame_data = b''.join(frames[frame_id][i] for i in range(total))
+            ts = frame_ts.pop(frame_id, 0)
 
             for fid in [fid for fid in list(frames.keys()) if fid < frame_id - 5]:
-                del frames[fid]
+                frames.pop(fid, None)
+                frame_ts.pop(fid, None)
             del frames[frame_id]
 
             arr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if frame is not None:
-                global _latest_frame
+                global _latest_frame, _latest_frame_ts
                 with _latest_frame_lock:
-                    _latest_frame = frame
+                    _latest_frame    = frame
+                    _latest_frame_ts = ts
                 if not frame_queue.full():
                     frame_queue.put(frame)
                 cv2.imshow('Webcam Live', frame)
