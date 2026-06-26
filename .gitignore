@@ -19,6 +19,7 @@ archive/
 
 # 생성 데이터 (재생성 가능)
 data/scene/
+data/radar/
 
 # 외부 도구 (별도 repo)
 tools/gigapose/

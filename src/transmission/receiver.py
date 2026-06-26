@@ -2,8 +2,10 @@ import socket
 import cv2
 import threading
 import struct
+import json
 import numpy as np
 from collections import defaultdict
+from pathlib import Path
 import queue
 import time
 
@@ -18,6 +20,22 @@ _latest_frame_lock = threading.Lock()
 
 _latest_radar      = None   # (payload_bytes, ts_ms)
 _latest_radar_lock = threading.Lock()
+
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+
+def load_config() -> dict:
+    path = _PROJECT_ROOT / "config" / "receiver.json"
+    if path.exists():
+        return json.loads(path.read_text())
+    return {"pipeline_delay_ms": 700, "matlab_radar_port": 5009}
+
+
+_cfg = load_config()
+pipeline_delay_ms: int = _cfg["pipeline_delay_ms"]
+_MATLAB_PORT: int      = _cfg["matlab_radar_port"]
+
+_matlab_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 
 def _ms_to_timestr(ms: int) -> str:
@@ -50,7 +68,7 @@ def radar_receive():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("0.0.0.0", RADAR_PORT))
     sock.settimeout(0.5)
-    print(f"[Radar] 수신 대기 중 0.0.0.0:{RADAR_PORT}")
+    print(f"[Radar] 수신 대기 중 0.0.0.0:{RADAR_PORT} → MATLAB port {_MATLAB_PORT}")
 
     total_bytes = 0
     count = 0
@@ -70,7 +88,9 @@ def radar_receive():
         with _latest_radar_lock:
             _latest_radar = (payload, ts_ms)
 
-        print(f"[Radar] seq={seq:>6}  {_ms_to_timestr(ts_ms)}  size={len(payload):>5}B  {payload[:16].hex()}")
+        # 커스텀 헤더 제거 후 원본 DCA1000 패킷을 MATLAB으로 포워딩
+        _matlab_sock.sendto(payload, ("127.0.0.1", _MATLAB_PORT))
+
         count += 1
         total_bytes += len(data)
 
