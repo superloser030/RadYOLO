@@ -17,9 +17,16 @@ models/
 # archive
 archive/
 
+# 생성 데이터 (재생성 가능)
+data/scene/
+
+# 외부 도구 (별도 repo)
+tools/gigapose/
+tools/InstantMesh/
+tools/TripoSR/
+tools/nvdiffrast/
+tools/spconv/
+
 # 임시/출력 파일
 tmp_*.png
 tmp_*.jpg
-background2.jpg
-depth.png
-mask.png

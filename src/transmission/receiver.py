@@ -4,12 +4,22 @@ import threading
 import struct
 import numpy as np
 from collections import defaultdict
+import queue
 import time
 
 RADAR_PORT  = 5006
 WEBCAM_PORT = 5007
 
-shutdown_event = threading.Event()
+shutdown_event    = threading.Event()
+frame_queue       = queue.Queue(maxsize=30)  # bg_select 등에서 읽는 프레임 큐
+_latest_frame     = None
+_latest_frame_lock = threading.Lock()
+
+
+def get_latest_frame():
+    """라이브 루프용: 가장 최근 수신 프레임 반환 (None이면 아직 수신 안됨)"""
+    with _latest_frame_lock:
+        return _latest_frame
 
 
 def radar_receive():
@@ -70,6 +80,11 @@ def webcam_receive():
             arr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if frame is not None:
+                global _latest_frame
+                with _latest_frame_lock:
+                    _latest_frame = frame
+                if not frame_queue.full():
+                    frame_queue.put(frame)
                 cv2.imshow('Webcam Live', frame)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     shutdown_event.set()

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>렌즈 보정 캘리브레이션</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; color:#ddd; font:13px monospace; display:flex; flex-direction:column; height:100vh; overflow:hidden; }
+
+#viewer { flex:1; position:relative; }
+#viewer canvas { display:block; }
+
+#panel {
+  height:180px; background:#1a1a1a; border-top:1px solid #333;
+  display:flex; align-items:center; gap:24px; padding:0 24px;
+}
+
+#preview-wrap { position:relative; flex-shrink:0; }
+#preview { height:150px; border:1px solid #444; image-rendering:pixelated; }
+#preview-label { position:absolute; bottom:2px; left:4px; font-size:10px; color:#aaa; }
+
+#sliders { flex:1; display:flex; flex-direction:column; gap:10px; }
+.row { display:flex; align-items:center; gap:12px; }
+.row label { width:80px; text-align:right; color:#aaa; }
+.row input[type=range] { flex:1; accent-color:#4af; cursor:pointer; }
+.row .val { width:70px; color:#4af; }
+.row input[type=number] { width:70px; background:#222; border:1px solid #444; color:#4af; padding:2px 4px; }
+
+#btns { display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
+button { padding:8px 18px; border:none; border-radius:4px; cursor:pointer; font:13px monospace; }
+#btn-save { background:#4af; color:#000; font-weight:bold; }
+#btn-reset { background:#444; color:#ddd; }
+#status { color:#8f8; font-size:11px; margin-top:4px; }
+
+#loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; }
+#info { position:absolute; top:10px; left:12px; color:#888; font-size:11px; pointer-events:none; }
+</style>
+</head>
+<body>
+
+<div id="viewer">
+  <div id="loading">로딩 중...</div>
+  <div id="info">드래그: 회전 | 스크롤: 줌 | 우클릭: 이동</div>
+</div>
+
+<div id="panel">
+  <div id="preview-wrap">
+    <canvas id="preview"></canvas>
+    <div id="preview-label">보정 이미지</div>
+  </div>
+
+  <div id="sliders">
+    <div class="row">
+      <label>k1</label>
+      <input type="range" id="s-k1" min="-500" max="500" value="0" step="1">
+      <input type="number" id="n-k1" min="-0.5" max="0.5" value="0" step="0.001">
+    </div>
+    <div class="row">
+      <label>k2</label>
+      <input type="range" id="s-k2" min="-500" max="500" value="0" step="1">
+      <input type="number" id="n-k2" min="-0.5" max="0.5" value="0" step="0.001">
+    </div>
+    <div class="row">
+      <label>fx (% 너비)</label>
+      <input type="range" id="s-fx" min="50" max="200" value="100" step="1">
+      <input type="number" id="n-fx" min="50" max="200" value="100" step="1">
+    </div>
+  </div>
+
+  <div id="btns">
+    <button id="btn-save">저장 (s)</button>
+    <button id="btn-reset">초기화</button>
+    <div id="status"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+               "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── Three.js 설정 ────────────────────────────────────────────────
+const viewerEl  = document.getElementById('viewer');
+const renderer  = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+const scene     = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+const cam3      = new THREE.PerspectiveCamera(60, 1, 0.001, 100);
+cam3.position.set(0, 0, 2.5);
+const controls  = new OrbitControls(cam3, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+viewerEl.appendChild(renderer.domElement);
+
+function resize() {
+  const { clientWidth: w, clientHeight: h } = viewerEl;
+  renderer.setSize(w, h);
+  cam3.aspect = w / h;
+  cam3.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+(function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, cam3); })();
+
+// ── 이미지 로드 ──────────────────────────────────────────────────
+function loadImage(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      res({ data: c.getContext('2d').getImageData(0,0,img.width,img.height), w: img.width, h: img.height });
+    };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+const STEP = 3;
+const DEPTH_SCALE = 1.2;
+let W, H, colorData, depthData;
+let pointsObj = null;
+let geo = null;
+
+// ── 포인트클라우드 빌드 ──────────────────────────────────────────
+function buildCloud(k1, k2, fx) {
+  const cx = W / 2, cy = H / 2;
+  const cols = Math.floor(W / STEP), rows = Math.floor(H / STEP);
+  const n = cols * rows;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3);
+  let cnt = 0;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const px = c * STEP, py = r * STEP;
+      const pi = (py * W + px) * 4;
+      const d  = depthData[pi] / 255;
+
+      // viewer.html과 동일한 투영 + 왜곡 보정
+      const xn = (px - cx) / fx;
+      const yn = (py - cy) / fx;
+      const r2 = xn*xn + yn*yn;
+      const radial = 1 + k1*r2 + k2*r2*r2;
+
+      pos[cnt*3]   =  xn / radial;
+      pos[cnt*3+1] = -yn / radial;
+      pos[cnt*3+2] = (d - 0.5) * DEPTH_SCALE;
+
+      col[cnt*3]   = colorData[pi]   / 255;
+      col[cnt*3+1] = colorData[pi+1] / 255;
+      col[cnt*3+2] = colorData[pi+2] / 255;
+      cnt++;
+    }
+  }
+
+  if (pointsObj) { scene.remove(pointsObj); geo.dispose(); }
+  geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos.slice(0, cnt*3), 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col.slice(0, cnt*3), 3));
+  const mat = new THREE.PointsMaterial({ vertexColors: true, size: 0.003, sizeAttenuation: true });
+  pointsObj = new THREE.Points(geo, mat);
+  scene.add(pointsObj);
+}
+
+// ── 미리보기 이미지 (undistort) ──────────────────────────────────
+const previewCanvas = document.getElementById('preview');
+const previewCtx    = previewCanvas.getContext('2d');
+
+function buildPreview(k1, k2, fx) {
+  const SCALE = 0.25;
+  const pw = Math.round(W * SCALE), ph = Math.round(H * SCALE);
+  previewCanvas.width = pw; previewCanvas.height = ph;
+  const out = previewCtx.createImageData(pw, ph);
+  const cx = W/2, cy = H/2;
+
+  for (let y = 0; y < ph; y++) {
+    for (let x = 0; x < pw; x++) {
+      const sx = x / SCALE, sy = y / SCALE;
+      const xn = (sx - cx) / fx, yn = (sy - cy) / fx;
+      const r2 = xn*xn + yn*yn;
+      const radial = 1 + k1*r2 + k2*r2*r2;
+      const srcX = Math.round(xn * radial * fx + cx);
+      const srcY = Math.round(yn * radial * fx + cy);
+      const oi = (y * pw + x) * 4;
+      if (srcX >= 0 && srcX < W && srcY >= 0 && srcY < H) {
+        const si = (srcY * W + srcX) * 4;
+        out.data[oi]   = colorData[si];
+        out.data[oi+1] = colorData[si+1];
+        out.data[oi+2] = colorData[si+2];
+        out.data[oi+3] = 255;
+      }
+    }
+  }
+  previewCtx.putImageData(out, 0, 0);
+}
+
+// ── 슬라이더 연동 ────────────────────────────────────────────────
+function getVals() {
+  return {
+    k1: parseFloat(document.getElementById('s-k1').value) / 1000,
+    k2: parseFloat(document.getElementById('s-k2').value) / 1000,
+    fx: W * parseFloat(document.getElementById('s-fx').value) / 100,
+  };
+}
+
+let pending = false;
+function scheduleUpdate() {
+  if (pending) return;
+  pending = true;
+  requestAnimationFrame(() => {
+    pending = false;
+    const { k1, k2, fx } = getVals();
+    buildCloud(k1, k2, fx);
+    buildPreview(k1, k2, fx);
+  });
+}
+
+function syncNumFromSlider(slider, numId, scale) {
+  document.getElementById(numId).value = (parseFloat(slider.value) / scale).toFixed(3);
+}
+function syncSliderFromNum(num, sliderId, scale) {
+  document.getElementById(sliderId).value = Math.round(parseFloat(num.value) * scale);
+}
+
+['k1','k2'].forEach(k => {
+  document.getElementById(`s-${k}`).addEventListener('input', e => {
+    syncNumFromSlider(e.target, `n-${k}`, 1000);
+    scheduleUpdate();
+  });
+  document.getElementById(`n-${k}`).addEventListener('input', e => {
+    syncSliderFromNum(e.target, `s-${k}`, 1000);
+    scheduleUpdate();
+  });
+});
+document.getElementById('s-fx').addEventListener('input', e => {
+  document.getElementById('n-fx').value = e.target.value;
+  scheduleUpdate();
+});
+document.getElementById('n-fx').addEventListener('input', e => {
+  document.getElementById('s-fx').value = e.target.value;
+  scheduleUpdate();
+});
+
+// ── 저장 ─────────────────────────────────────────────────────────
+async function save() {
+  const { k1, k2, fx } = getVals();
+  const calib = { k1, k2, fx, fy: fx, cx: W/2, cy: H/2, image_size: [W, H] };
+  try {
+    const r = await fetch('/api/calib/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(calib),
+    });
+    const msg = await r.text();
+    document.getElementById('status').textContent = msg;
+  } catch(e) {
+    // fallback: 값만 표시
+    document.getElementById('status').textContent =
+      `k1=${k1.toFixed(4)} k2=${k2.toFixed(4)} fx=${fx.toFixed(1)}`;
+  }
+}
+
+document.getElementById('btn-save').addEventListener('click', save);
+document.getElementById('btn-reset').addEventListener('click', () => {
+  ['s-k1','s-k2'].forEach(id => document.getElementById(id).value = 0);
+  ['n-k1','n-k2'].forEach(id => document.getElementById(id).value = '0.000');
+  document.getElementById('s-fx').value = 100;
+  document.getElementById('n-fx').value = 100;
+  scheduleUpdate();
+});
+window.addEventListener('keydown', e => { if (e.key === 's') save(); });
+
+// ── 초기 로드 ────────────────────────────────────────────────────
+async function init() {
+  const [color, depth, camJson, calibJson] = await Promise.all([
+    loadImage('/data/scene/background.jpg'),
+    loadImage('/data/scene/depth.png'),
+    fetch('/config/camera.json').then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch('/config/calib.json').then(r => r.ok ? r.json() : null).catch(() => null),
+  ]);
+  W = color.w; H = color.h;
+  colorData = color.data.data;
+  depthData = depth.data.data;
+
+  // 초기값: calib.json 있으면 우선, 없으면 camera.json
+  const src = calibJson || camJson;
+  let initK1 = 0, initK2 = 0, initFx = W;
+  if (src) {
+    initK1 = src.k1 ?? 0;
+    initK2 = src.k2 ?? 0;
+    initFx = src.fx ?? W;
+  }
+
+  const fxPct = Math.round(initFx / W * 100);
+  document.getElementById('s-k1').value = Math.round(initK1 * 1000);
+  document.getElementById('n-k1').value = initK1.toFixed(3);
+  document.getElementById('s-k2').value = Math.round(initK2 * 1000);
+  document.getElementById('n-k2').value = initK2.toFixed(3);
+  document.getElementById('s-fx').value = fxPct;
+  document.getElementById('n-fx').value = fxPct;
+
+  previewCanvas.style.height = '150px';
+  previewCanvas.style.width  = 'auto';
+
+  buildCloud(initK1, initK2, initFx);
+  buildPreview(initK1, initK2, initFx);
+
+  document.getElementById('loading').style.display = 'none';
+}
+
+init().catch(e => document.getElementById('loading').textContent = '로드 실패: ' + e.message);
+</script>
+</body>
+</html>

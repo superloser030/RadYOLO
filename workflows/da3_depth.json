@@ -1,0 +1,34 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "background.jpg"
+    }
+  },
+  "2": {
+    "class_type": "DownloadAndLoadDepthAnythingV3Model",
+    "inputs": {
+      "model": "da3_large.safetensors",
+      "precision": "auto",
+      "attention": "auto"
+    }
+  },
+  "3": {
+    "class_type": "DepthAnything_V3",
+    "inputs": {
+      "da3_model": ["2", 0],
+      "images": ["1", 0],
+      "normalization_mode": "V2-Style",
+      "resize_method": "resize",
+      "invert_depth": false,
+      "keep_model_size": false
+    }
+  },
+  "4": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["3", 0],
+      "filename_prefix": "depth"
+    }
+  }
+}
