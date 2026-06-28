@@ -17,7 +17,8 @@ OUT_DIR = Path(__file__).resolve().parent
 
 
 def test(bname, backend, idx):
-    cap = cv2.VideoCapture(idx, backend)
+    # open 타임아웃 3초 — MSMF 가 없는 index 에서 무한 대기(hang)하는 것 방지
+    cap = cv2.VideoCapture(idx, backend, [cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 3000])
     if not cap.isOpened():
         print(f"{bname:5} idx{idx}: 없음")
         cap.release()
@@ -58,7 +59,7 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"DSHOW idx{idx}: 오류 {e}")
         time.sleep(0.3)
-    for idx in range(2):
+    for idx in range(5):
         try:
             test("MSMF", cv2.CAP_MSMF, idx)
         except Exception as e:
