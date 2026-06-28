@@ -289,8 +289,9 @@ def radar_forward():
 
 
 def webcam_send(fps, quality, width, height):
-    cap = cv2.VideoCapture(_cam["device_index"], cv2.CAP_DSHOW)
-    # MJPG(압축) 캡처 — 비압축(YUY2)은 1080p 에서 USB 대역폭 한계로 ~5fps 제한
+    # MSMF 백엔드 — DSHOW 는 1080p 를 YUY2 로 강제해 3.5fps 한계.
+    # MSMF + MJPG 는 30fps (probe 측정). FOURCC get 은 빈칸으로 나오지만 동작함.
+    cap = cv2.VideoCapture(_cam["device_index"], cv2.CAP_MSMF)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
