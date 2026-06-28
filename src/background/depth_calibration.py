@@ -3,11 +3,12 @@ import numpy as np
 import cv2
 from pathlib import Path
 
+from src.utils.config import load_camera
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEPTH_PATH   = PROJECT_ROOT / "data" / "scene" / "depth.png"
 BG_TS_PATH   = PROJECT_ROOT / "data" / "scene" / "background_ts.txt"
 TARGETS_PATH = PROJECT_ROOT / "data" / "radar" / "targets.json"
-CAM_CFG_PATH = PROJECT_ROOT / "config" / "camera.json"
 
 SYNC_WINDOW_MS = 1000
 
@@ -23,7 +24,7 @@ def calibrate_depth():
         print("[Calib] depth.png 없음, 건너뜀")
         return
 
-    cam = json.loads(CAM_CFG_PATH.read_text())
+    cam = load_camera()
     fx, cx = cam["fx"], cam["cx"]
 
     bg_ts = int(BG_TS_PATH.read_text().strip())
