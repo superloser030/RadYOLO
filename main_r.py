@@ -112,8 +112,10 @@ def live_update_loop(cam_cfg):
     """라이브 루프: YOLO 위치(0.3s) + GigaPose 회전(이전 추론 완료 즉시) 갱신."""
     import time, cv2
     from ultralytics import YOLO
+    from src.objects.radar_fusion import load_latest_targets, match_one
 
-    YOLO_MODEL = str(PROJECT_ROOT / "models" / "yolo11x-seg.pt")
+    YOLO_MODEL   = str(PROJECT_ROOT / "models" / "yolo11x-seg.pt")
+    TARGETS_PATH = PROJECT_ROOT / "data" / "radar" / "targets.json"
 
     yolo = YOLO(YOLO_MODEL)
     objects_dir = PROJECT_ROOT / "data" / "objects"
@@ -130,6 +132,10 @@ def live_update_loop(cam_cfg):
         fh, fw = frame.shape[:2]
         sx = cam_w / fw
         sy = cam_h / fh
+
+        # 웹캠 프레임 ts(=레이더 targets 와 같은 시계)로 동기된 레이더 target 로드
+        frame_ts = receiver.get_latest_frame_ts()
+        targets  = load_latest_targets(TARGETS_PATH, frame_ts)
 
         results = yolo(frame, verbose=False, conf=0.4)
 
@@ -162,6 +168,10 @@ def live_update_loop(cam_cfg):
                         }
 
             if best:
+                # 레이더 거리/방위/속도 매칭 (bbox 가로 범위 안 target)
+                radar = match_one(targets, best["bbox"], cam_cfg)
+                if radar:
+                    best.update(radar)   # range_m, azimuth_deg, velocity_mps
                 (obj_dir / "live.json").write_text(json.dumps(best))
 
                 # 이전 추론이 끝난 즉시 다음 추론 시작
