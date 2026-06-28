@@ -292,9 +292,10 @@ def radar_forward():
 
 
 def webcam_send(fps, quality, width, height):
-    # MSMF 백엔드 — DSHOW 는 1080p 를 YUY2 로 강제해 3.5fps 한계.
-    # MSMF + MJPG 는 30fps (probe 측정). FOURCC get 은 빈칸으로 나오지만 동작함.
-    cap = cv2.VideoCapture(_cam["device_index"], cv2.CAP_MSMF)
+    # DSHOW 백엔드 — 외장 웹캠은 DSHOW 에만 잡힘 (MSMF 는 외장 미열거).
+    # 480p 에서만 MJPG 협상되어 30fps (1080p/720p 는 YUY2 로 8/3.5fps).
+    # → 레벨 해상도를 480p 고정해서 30fps 확보.
+    cap = cv2.VideoCapture(_cam["device_index"], cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)

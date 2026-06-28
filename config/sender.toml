@@ -6,23 +6,23 @@
 
 # ─── 레벨 테이블 ─────────────────────────────────
 # (TOML 규칙상 최상위 배열은 모든 [섹션] 보다 위에 있어야 함)
-# 업그레이드 우선순위: chirp → fps → 해상도 → quality
-#   chirp : 32/64/128  (TDM 2TX 이므로 num_loops = chirp/2)
-#   fps   : frame_period_01ms = 10000 / fps   (frameCfg 5번째 인자, 0.1ms 단위)
-#   est_mbps : 최악(고복잡 씬) 기준 추정 대역폭. 실측 후 보정.
-# ⚠ chirp 128 @ 15fps: chirp_cycle 486us×128=62ms 로 67ms 프레임에 빡빡(여유 5ms)
+# 해상도는 854x480 고정 (외장 웹캠은 480p MJPG 에서만 30fps, 720p/1080p 는 YUY2
+#   8/3.5fps 로 떨어짐. 어차피 ESRGAN x4 업스케일로 배경 품질 보완).
+# 업그레이드 우선순위: fps 5 먼저 → chirp 최대 → fps 10 → quality
+#   chirp 가 대역폭을 거의 다 결정 (chirp128 fps10 = 42Mbps). 레이더 품질 최우선.
+#   fps 는 최대 10 (chirp128 레이더 한계 ~14fps). quality 는 480p 라 거의 거저.
+#   chirp : 32/64/128 (num_loops = chirp/2). fps : frame_period_ms = 1000/fps.
+#   est_mbps : 추정 대역폭(레이더+웹캠). 실측 후 보정.
 #                    레벨 번호 ↓
 level = [
-  { chirp =  32, fps =  2, width =  854, height =  480, quality = 20, est_mbps =   4.3 },  #  1
-  { chirp =  32, fps =  3, width =  854, height =  480, quality = 20, est_mbps =   6.4 },  #  2
-  { chirp =  32, fps =  5, width =  854, height =  480, quality = 20, est_mbps =  10.8 },  #  3
-  { chirp =  32, fps =  5, width = 1280, height =  720, quality = 20, est_mbps =  17.6 },  #  4
-  { chirp =  32, fps = 10, width = 1280, height =  720, quality = 20, est_mbps =  35.4 },  #  5
-  { chirp =  64, fps = 10, width = 1280, height =  720, quality = 20, est_mbps =  45.9 },  #  6
-  { chirp = 128, fps = 10, width = 1280, height =  720, quality = 20, est_mbps =  66.8 },  #  7
-  { chirp = 128, fps = 10, width = 1920, height = 1080, quality = 20, est_mbps =  97.9 },  #  8
-  { chirp = 128, fps = 15, width = 1920, height = 1080, quality = 20, est_mbps = 146.9 },  #  9
-  { chirp = 128, fps = 15, width = 1920, height = 1080, quality = 40, est_mbps = 188.9 },  # 10
+  { chirp =  32, fps =  3, width = 854, height = 480, quality = 10, est_mbps =  3.3 },  # 1 극저 폴백
+  { chirp =  32, fps =  5, width = 854, height = 480, quality = 10, est_mbps =  5.5 },  # 2 fps5 확보
+  { chirp =  64, fps =  5, width = 854, height = 480, quality = 10, est_mbps = 11.0 },  # 3 chirp↑
+  { chirp = 128, fps =  5, width = 854, height = 480, quality = 10, est_mbps = 21.0 },  # 4 chirp최대
+  { chirp = 128, fps = 10, width = 854, height = 480, quality = 10, est_mbps = 43.0 },  # 5 fps10
+  { chirp = 128, fps = 10, width = 854, height = 480, quality = 20, est_mbps = 43.0 },  # 6 q↑
+  { chirp = 128, fps = 10, width = 854, height = 480, quality = 40, est_mbps = 44.0 },  # 7 q↑
+  { chirp = 128, fps = 10, width = 854, height = 480, quality = 80, est_mbps = 45.0 },  # 8 최고
 ]
 
 # ─── CAMERA (웹캠 캡처 + intrinsic) ──────────────
