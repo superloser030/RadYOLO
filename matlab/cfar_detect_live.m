@@ -147,10 +147,23 @@ while true
     end
 
     % atomic write: tmp 에 쓰고 rename (live loop 이 깨진 파일 읽는 것 방지)
+    % Windows 는 main_r 이 targets.json 을 읽는 순간 movefile 이 막히므로 재시도.
     fid = fopen(tmpFile, 'w');
     fprintf(fid, '%s', jsonencode(frameResults));
     fclose(fid);
-    movefile(tmpFile, outputFile);
+    moved = false;
+    for attempt = 1:20
+        try
+            movefile(tmpFile, outputFile);
+            moved = true;
+            break;
+        catch
+            pause(0.03);   % main_r 이 파일을 놓을 때까지 잠깐 대기 후 재시도
+        end
+    end
+    if ~moved
+        warning('targets.json movefile 실패 (계속 잠김). 다음 폴링에 재시도.');
+    end
 
     pause(POLL_SEC);
 end

@@ -23,27 +23,34 @@ def azimuth_to_x(azimuth_deg: float, cam: dict) -> float:
     return cam["cx"] + cam["fx"] * math.tan(math.radians(azimuth_deg))
 
 
+_last_targets = []   # 읽기 실패(쓰는 중/잠김) 시 직전 값 유지
+
+
 def load_latest_targets(path, ts_ms=None, tol_ms=500):
     """targets.json 에서 ts 에 가장 가까운 프레임의 targets 반환.
 
     ts_ms=None → 최신 프레임. ts 차이가 tol_ms 초과면 [] (동기 실패).
+    파일이 없거나 쓰는 중(파싱 실패)이면 직전 값 유지 (깜빡임 방지).
     targets.json: [{frame_idx, ts_ms, targets:[{range_m, velocity_mps, azimuth_deg}]}]
     """
+    global _last_targets
     p = Path(path)
     if not p.exists():
-        return []
+        return _last_targets
     try:
         data = json.loads(p.read_text())
     except (ValueError, OSError):
-        return []
+        return _last_targets   # movefile 직전/쓰는 중 → 직전 유지
     if not data:
-        return []
+        return _last_targets
     if ts_ms is None:
-        return data[-1].get("targets", [])
+        _last_targets = data[-1].get("targets", [])
+        return _last_targets
     best = min(data, key=lambda f: abs(f.get("ts_ms", 0) - ts_ms))
     if abs(best.get("ts_ms", 0) - ts_ms) > tol_ms:
-        return []
-    return best.get("targets", [])
+        return []   # 동기 실패(오래된 데이터)는 빈 값 — 직전 유지 안 함
+    _last_targets = best.get("targets", [])
+    return _last_targets
 
 
 def match_one(targets, bbox, cam):

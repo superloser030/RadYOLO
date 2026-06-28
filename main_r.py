@@ -220,6 +220,28 @@ def _start_iperf_server():
         return None
 
 
+def _start_matlab_cfar():
+    """레이더 실시간 CFAR(cfar_detect_live.m)을 MATLAB 배치로 자동 실행.
+
+    .mat 생성(메타 수신) 후에 호출할 것. 출력은 data/radar/cfar_live.log 로.
+    matlab 명령이 PATH 에 없으면 None (수동 실행 필요).
+    """
+    matlab_dir = PROJECT_ROOT / "matlab"
+    log_path   = PROJECT_ROOT / "data" / "radar" / "cfar_live.log"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log = open(log_path, "w")
+        proc = subprocess.Popen(
+            ["matlab", "-batch", "cfar_detect_live"],
+            cwd=str(matlab_dir),
+            stdout=log, stderr=subprocess.STDOUT)
+        print(f"[Radar] MATLAB cfar_detect_live 자동 시작 (로그: data/radar/{log_path.name})")
+        return proc
+    except FileNotFoundError:
+        print("[Radar] 'matlab' 명령 못 찾음 — cfar_detect_live.m 수동 실행 필요")
+        return None
+
+
 def _start_viewer(port=8000):
     # sender.toml 의 intrinsic 을 viewer 가 fetch 할 JSON 으로 export
     # (archive_data 가 data/ 를 비운 뒤여야 하므로 viewer 시작 시점에 생성)
@@ -250,6 +272,7 @@ if __name__ == "__main__":
     cam_cfg = load_camera()
     _http_server = None
     _iperf_proc  = None
+    _matlab_proc = None
 
     if not args.viewer_only:
         print("=== 이전 data/ 아카이브 중 ===")
@@ -272,8 +295,9 @@ if __name__ == "__main__":
         if receiver._chirp_ready.wait(timeout=20):
             print("[Init] 메타 확정 — 2초 후 시작")
             _time.sleep(2)
+            _matlab_proc = _start_matlab_cfar()   # .mat 생성됨 → 실시간 CFAR 시작
         else:
-            print("[Init] 메타 타임아웃(20s) — 웹캠만으로 진행")
+            print("[Init] 메타 타임아웃(20s) — 웹캠만으로 진행 (레이더 CFAR 미시작)")
 
         if not args.skip_bg:
             print("=== Step 1: 배경 프레임 선택 (10초) ===")
@@ -335,3 +359,5 @@ if __name__ == "__main__":
         receiver.close_bin_file()
         if _iperf_proc is not None:
             _iperf_proc.terminate()
+        if _matlab_proc is not None:
+            _matlab_proc.terminate()
