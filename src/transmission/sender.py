@@ -88,9 +88,10 @@ def monitor_record_proc(proc):
 
 
 def _send_and_wait(ser, command, timeout=2.0):
-    """명령 전송 후 'Done'/'Error'/프롬프트가 올 때까지 대기. 응답 문자열 반환.
+    """명령 전송 후 프롬프트(mmwDemo:/>)가 올 때까지 대기. 응답 문자열 반환.
 
-    고정 sleep(0.05) 대신 응답을 기다려 명령 유실(partial config)을 방지.
+    'Done' 에서 끊으면 뒤따르는 프롬프트가 다음 명령으로 밀려 응답 정렬이
+    어긋난다(partial config 유발). 프롬프트까지 완전히 읽어 다음 명령과 분리.
     """
     ser.reset_input_buffer()
     ser.write((command + '\r\n').encode('utf-8'))
@@ -101,9 +102,18 @@ def _send_and_wait(ser, command, timeout=2.0):
         if not line:
             continue
         resp += line
-        if "Done" in line or "Error" in line:
+        if "mmwDemo" in line:   # 프롬프트 = 이 명령 처리 완료
             break
     return resp.strip()
+
+
+def _resp_status(resp: str) -> str:
+    """응답에서 Done/Error 상태만 추출 (마지막 줄은 항상 프롬프트라 무의미)."""
+    if "Error" in resp:
+        return next((l.strip() for l in resp.splitlines() if "Error" in l), "Error")
+    if "Done" in resp:
+        return "Done"
+    return "ok"
 
 
 def uart_send_commands(commands):
@@ -111,8 +121,7 @@ def uart_send_commands(commands):
     with serial.Serial(CLI_PORT, CLI_BAUD, timeout=0.3) as ser:
         for command in commands:
             resp = _send_and_wait(ser, command)
-            tail = resp.splitlines()[-1] if resp else ""
-            print(f"  Send: {command:<30} | {tail}")
+            print(f"  Send: {command:<30} | {_resp_status(resp)}")
 
 
 def send_radar_config(num_loops, frame_period_01ms):
@@ -137,8 +146,7 @@ def send_radar_config(num_loops, frame_period_01ms):
                 parts[5] = str(frame_period_01ms)  # framePeriodicity (0.1ms 단위)
                 command = ' '.join(parts)
             resp = _send_and_wait(ser, command)
-            tail = resp.splitlines()[-1] if resp else ""
-            print(f"  Send: {command:<45} | {tail}")
+            print(f"  Send: {command:<45} | {_resp_status(resp)}")
             if "Error" in resp:
                 print(f"  [경고] '{command.split()[0]}' 에러 응답 — 설정 실패 가능")
     print("[UART] 레이더 설정 완료.")
@@ -281,26 +289,32 @@ def radar_forward():
 
 def webcam_send(fps, quality, width, height):
     cap = cv2.VideoCapture(_cam["device_index"], cv2.CAP_DSHOW)
+    # MJPG(압축) 캡처 — 비압축(YUY2)은 1080p 에서 USB 대역폭 한계로 ~5fps 제한
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+    cap.set(cv2.CAP_PROP_FPS, fps)
 
     if not cap.isOpened():
         print("[Webcam] 카메라 열기 실패")
         return
 
-    act_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    act_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    act_w   = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    act_h   = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fourcc  = int(cap.get(cv2.CAP_PROP_FOURCC))
+    fourcc_s = "".join(chr((fourcc >> 8*i) & 0xFF) for i in range(4))
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     frame_id = 0
     interval = 1 / fps
     print(f"[Webcam] 전송 시작 → {DESKTOP_IP}:{WEBCAM_PORT}  "
-          f"({fps}fps, {act_w}x{act_h} 요청 {width}x{height}, quality={quality})")
+          f"({fps}fps, {act_w}x{act_h} 요청 {width}x{height}, q={quality}, fmt={fourcc_s})")
 
     _last_report = time.time()
     _bytes_acc   = 0
     _frame_acc   = 0
 
     while True:
+        t_loop = time.time()
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.01)
@@ -329,7 +343,10 @@ def webcam_send(fps, quality, width, height):
             _last_report = _now
             _bytes_acc = _frame_acc = 0
 
-        time.sleep(interval)
+        # 목표 주기에서 캡처+인코딩+전송 소요시간을 뺀 만큼만 대기
+        rest = interval - (time.time() - t_loop)
+        if rest > 0:
+            time.sleep(rest)
 
     cap.release()
 
