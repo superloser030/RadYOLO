@@ -41,10 +41,10 @@ rdresp = phased.RangeDopplerResponse( ...
     'DopplerFFTLength',       ndop, ...
     'ReferenceRangeCentered', false);
 
-% PFA 강화(1e-5 → 1e-6): 검출 213개처럼 노이즈 과검출 줄이고 처리 부하 감소
-cfar2D = phased.CFARDetector2D('GuardBandSize', 5, 'TrainingBandSize', 10, ...
-    'ProbabilityFalseAlarm', 1e-6);
-gb = 5; tb = 10; margin = gb + tb;
+% PFA 1e-7 + 밴드 확대: det 160개(노이즈 과다)를 수십 개로 줄여 처리/지연 감소
+cfar2D = phased.CFARDetector2D('GuardBandSize', 8, 'TrainingBandSize', 16, ...
+    'ProbabilityFalseAlarm', 1e-7);
+gb = 8; tb = 16; margin = gb + tb;
 
 fprintf('실시간 CFAR 시작 (Ctrl+C 로 종료)\n');
 
