@@ -21,7 +21,7 @@ from src.transmission import receiver
 from src.transmission.receiver  import radar_receive, webcam_receive, meta_receive
 from src.background.bg_select   import select_background
 from src.background.upscale     import upscale_image
-from src.background.depth            import generate_depth
+from src.background.depth            import generate_depth, free_comfyui
 from src.background.depth_calibration import calibrate_depth
 from src.background.yolo_mask   import generate_mask
 from src.objects.obj_crop       import crop_objects
@@ -319,6 +319,7 @@ if __name__ == "__main__":
             generate_depth()
         else:
             print("\n=== Step 3: 건너뜀 (--skip-depth) ===")
+        free_comfyui()   # ESRGAN/DA3 다 썼으니 ComfyUI 모델 언로드 (VRAM 반환)
 
         if not args.skip_calib:
             print("\n=== Step 3.5: 레이더 기반 depth 보정 ===")

@@ -136,6 +136,15 @@ def crop_objects():
         print(f"[Crop] {class_name}_{idx}  conf={conf:.2f}  sam2={scores[0]:.3f}  → {obj_dir.relative_to(PROJECT_ROOT)}")
         objects.append((class_name, idx, obj_dir))
 
+    # SAM2 는 crop 단계에서만 쓰므로 GPU 에서 내림 (VRAM 반환)
+    del sam2
+    try:
+        import torch
+        torch.cuda.empty_cache()
+        print("[VRAM] SAM2 언로드 (VRAM 반환)")
+    except Exception:
+        pass
+
     return objects
 
 

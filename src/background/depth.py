@@ -66,5 +66,21 @@ def generate_depth():
     raise RuntimeError("[Depth] DA3 결과 없음")
 
 
+def free_comfyui():
+    """ComfyUI 가 캐시한 모델 언로드 + VRAM 반환 (ESRGAN/DA3 다 쓴 뒤 호출).
+
+    ComfyUI 는 모델을 캐시해 안 내리므로, depth/upscale 끝나면 /free 로 비운다.
+    """
+    try:
+        req = urllib.request.Request(
+            f"{COMFYUI_URL}/free",
+            data=json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8"),
+            headers={"Content-Type": "application/json"}, method="POST")
+        urllib.request.urlopen(req, timeout=15)
+        print("[VRAM] ComfyUI 모델 언로드 (ESRGAN/DA3 VRAM 반환)")
+    except Exception as e:
+        print(f"[VRAM] ComfyUI free 실패(무시): {e}")
+
+
 if __name__ == "__main__":
     generate_depth()
