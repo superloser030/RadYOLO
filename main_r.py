@@ -122,6 +122,7 @@ def live_update_loop(cam_cfg):
     cam_w = cam_cfg.get("width",  1920)
     cam_h = cam_cfg.get("height", 1080)
     inferring = {}   # obj_name → bool
+    _last_fusion = 0.0   # [Fusion] 콘솔 출력 throttle (1초)
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -143,6 +144,7 @@ def live_update_loop(cam_cfg):
             time.sleep(0.3)
             continue
 
+        fusion_lines = []
         for obj_dir in sorted(objects_dir.iterdir()):
             if not obj_dir.is_dir():
                 continue
@@ -172,6 +174,11 @@ def live_update_loop(cam_cfg):
                 radar = match_one(targets, best["bbox"], cam_cfg)
                 if radar:
                     best.update(radar)   # range_m, azimuth_deg, velocity_mps
+                    fusion_lines.append(
+                        f"[Fusion] {obj_dir.name:12} {radar['range_m']:6.2f}m | "
+                        f"az {radar['azimuth_deg']:+6.1f} | v {radar['velocity_mps']:+5.2f}")
+                else:
+                    fusion_lines.append(f"[Fusion] {obj_dir.name:12} miss")
                 (obj_dir / "live.json").write_text(json.dumps(best))
 
                 # 이전 추론이 끝난 즉시 다음 추론 시작
@@ -189,6 +196,13 @@ def live_update_loop(cam_cfg):
                             inferring[k] = False
 
                     threading.Thread(target=_launch, daemon=True).start()
+
+        now = time.time()
+        if now - _last_fusion >= 1.0:
+            print(f"--- radar targets: {len(targets)} ---")
+            for ln in fusion_lines:
+                print(ln)
+            _last_fusion = now
 
         time.sleep(0.3)
 
