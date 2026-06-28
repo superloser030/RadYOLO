@@ -102,18 +102,35 @@ class GPUManager:
 
     @classmethod
     def free_comfyui(cls):
-        """ComfyUI 가 캐시한 모델 언로드 + VRAM 반환."""
+        """ComfyUI 본체 모델 언로드 + DA3 별도 프로세스 종료.
+
+        DA3(depthanythingv3-nodes)는 ComfyUI 와 다른 pixi env 의 독립 프로세스라
+        /free 가 못 미침. 실측상 ~6GB 를 잡고 있어 직접 종료한다.
+        (다음 depth 때 ComfyUI 가 DA3 노드를 다시 띄움)
+        """
         import json
         import urllib.request
+        import subprocess
+        # 1) ComfyUI 본체 모델 언로드
         try:
             req = urllib.request.Request(
                 f"{cls.COMFYUI_URL}/free",
                 data=json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8"),
                 headers={"Content-Type": "application/json"}, method="POST")
             urllib.request.urlopen(req, timeout=15)
-            print("[VRAM] ComfyUI 모델 언로드 (ESRGAN/DA3)")
+            print("[VRAM] ComfyUI 본체 모델 언로드")
         except Exception as e:
             print(f"[VRAM] ComfyUI free 실패(무시): {e}")
+        # 2) DA3 추론 프로세스(독립 pixi) 종료 — /free 가 못 미치는 ~6GB
+        try:
+            subprocess.run(
+                ["powershell", "-Command",
+                 "Get-Process python -ErrorAction SilentlyContinue | "
+                 "Where-Object { $_.Path -like '*depthanything*' } | Stop-Process -Force"],
+                timeout=10, capture_output=True)
+            print("[VRAM] DA3 추론 프로세스 종료 (~6GB 반환)")
+        except Exception as e:
+            print(f"[VRAM] DA3 종료 실패(무시): {e}")
 
     @classmethod
     def release(cls, label="", comfyui=False):
