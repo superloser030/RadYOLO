@@ -193,5 +193,6 @@ while true
     fprintf('[CFAR] frame %d~%d | reader %.2fs total %.2fs | %d det | lag %.1fs\n', ...
         startIdx, lastIdx, t_reader, elapsed, n_last, lag);
 
+    clear fr   % reader 핸들 명시적 정리 (매 폴링 재생성 누수 → crash 방지)
     pause(POLL_SEC);
 end
