@@ -104,6 +104,7 @@ def _send_and_wait(ser, command, timeout=2.0):
         resp += line
         if "mmwDemo" in line:   # 프롬프트 = 이 명령 처리 완료
             break
+    time.sleep(0.08)   # 레이더가 다음 명령 받을 준비 시간 (Done 누락/레이스 방지)
     return resp.strip()
 
 
