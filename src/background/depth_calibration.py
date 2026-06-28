@@ -30,6 +30,11 @@ def calibrate_depth():
     bg_ts = int(BG_TS_PATH.read_text().strip())
 
     depth_img  = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
+    if depth_img is None:
+        print("[Calib] depth.png 읽기 실패, 건너뜀")
+        return
+    if depth_img.ndim == 3:          # 혹시 다채널로 읽히면 첫 채널만
+        depth_img = depth_img[:, :, 0]
     h, w       = depth_img.shape
     depth_norm = depth_img.astype(np.float32) / 255.0
 

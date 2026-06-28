@@ -322,7 +322,10 @@ if __name__ == "__main__":
 
         if not args.skip_calib:
             print("\n=== Step 3.5: 레이더 기반 depth 보정 ===")
-            calibrate_depth()
+            try:
+                calibrate_depth()
+            except Exception as e:
+                print(f"[Calib] 보정 실패, 건너뜀: {e}")
         else:
             print("\n=== Step 3.5: 건너뜀 (--skip-calib) ===")
 
