@@ -132,10 +132,23 @@ def archive_data():
 
     folder_name = f"{start_str}~{end_str}"
     dest = _ARCHIVE_DIR / folder_name
+    n = 1
+    while dest.exists():                      # 같은 분 재실행/잔여 폴더와 충돌 방지
+        n += 1
+        dest = _ARCHIVE_DIR / f"{folder_name}_{n}"
     dest.mkdir(parents=True, exist_ok=True)
 
     for item in items:
-        shutil.move(str(item), str(dest / item.name))
+        target = dest / item.name
+        if target.exists():                  # 만일의 중첩(radar/radar) 방지
+            if target.is_dir():
+                shutil.rmtree(target, ignore_errors=True)
+            else:
+                target.unlink(missing_ok=True)
+        try:
+            shutil.move(str(item), str(target))
+        except (PermissionError, OSError) as e:
+            print(f"[Archive] '{item.name}' 이동 실패(건너뜀): {e}")
 
     for f in (_F_START, _F_END, _F_HB):
         f.unlink(missing_ok=True)

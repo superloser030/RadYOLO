@@ -226,16 +226,19 @@ def _start_matlab_cfar():
     .mat 생성(메타 수신) 후에 호출할 것. 출력은 data/radar/cfar_live.log 로.
     matlab 명령이 PATH 에 없으면 None (수동 실행 필요).
     """
+    import datetime as _dt
     matlab_dir = PROJECT_ROOT / "matlab"
-    log_path   = PROJECT_ROOT / "data" / "radar" / "cfar_live.log"
+    # 로그는 data/ 밖(logs/)에 타임스탬프로 — archive 이동/좀비 잠금과 무관하게
+    log_dir = PROJECT_ROOT / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_path = log_dir / f"cfar_live_{_dt.datetime.now():%H%M%S}.log"
     try:
-        log_path.parent.mkdir(parents=True, exist_ok=True)
         log = open(log_path, "w")
         proc = subprocess.Popen(
             ["matlab", "-batch", "cfar_detect_live"],
             cwd=str(matlab_dir),
             stdout=log, stderr=subprocess.STDOUT)
-        print(f"[Radar] MATLAB cfar_detect_live 자동 시작 (로그: data/radar/{log_path.name})")
+        print(f"[Radar] MATLAB cfar_detect_live 자동 시작 (로그: logs/{log_path.name})")
         return proc
     except FileNotFoundError:
         print("[Radar] 'matlab' 명령 못 찾음 — cfar_detect_live.m 수동 실행 필요")

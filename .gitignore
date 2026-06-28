@@ -34,3 +34,4 @@ tools/spconv/
 # 임시/출력 파일
 tmp_*.png
 tmp_*.jpg
+logs/
