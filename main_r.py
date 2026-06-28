@@ -257,8 +257,6 @@ if __name__ == "__main__":
         else:
             print("=== Step 1: 건너뜀 (--skip-bg) ===")
 
-        _http_server = _start_viewer()
-
         if not args.skip_bg:
             print("\n=== Step 2: ESRGAN 업스케일 ===")
             upscale_image()
@@ -279,6 +277,9 @@ if __name__ == "__main__":
 
         print("\n=== Step 4: YOLO 마스크 생성 ===")
         generate_mask()
+
+        # 배경/깊이/마스크 준비 완료 → 뷰어 열기 (3D 모델은 이후 추가됨)
+        _http_server = _start_viewer()
 
         print("\n=== Step 5: 객체 크롭 + depth 마스크 정제 ===")
         crop_objects()
