@@ -41,10 +41,8 @@ rdresp = phased.RangeDopplerResponse( ...
     'DopplerFFTLength',       ndop, ...
     'ReferenceRangeCentered', false);
 
-% 밴드 원복(확대는 CFAR window 커져 처리 4초로 느려진 역효과). PFA 1e-6 유지.
-cfar2D = phased.CFARDetector2D('GuardBandSize', 5, 'TrainingBandSize', 10, ...
-    'ProbabilityFalseAlarm', 1e-6);
-gb = 5; tb = 10; margin = gb + tb;
+% CA-CFAR (벡터화 conv2 방식 — phased.CFARDetector2D 의 셀별 루프보다 훨씬 빠름)
+gb = 5; tb = 10; Pfa = 1e-6; margin = gb + tb;
 
 fprintf('실시간 CFAR 시작 (Ctrl+C 로 종료)\n');
 
@@ -111,30 +109,37 @@ while true
             rdMaps(:, :, rx) = rdMap;
         end
 
-        % CFAR (RX1 기준)
+        % CFAR (RX1 기준) — 벡터화 CA-CFAR
         resp = abs(rdMaps(:,:,1)).^2;
         [nR, nD] = size(resp);
-        % range 0.3~6m 범위 bin 만 CUT (실내 밖 먼 노이즈 제거 + 처리 가속)
-        rValid = find(rangeGrid >= 0.3 & rangeGrid <= 6.0);
-        rValid = rValid(rValid > margin & rValid <= nR - margin);
-        [columnInds, rowInds] = meshgrid(margin+1:nD-margin, rValid);
-        CUTIdx     = [rowInds(:) columnInds(:)]';
-        detections = cfar2D(resp, CUTIdx);
 
-        % 검출된 셀 중 반사 강한(SNR 높은) 상위 N개만 angle 처리
-        % → 약한 노이즈 검출 제외 (거리 안정화 + angle FFT 부하 감소)
-        det_k = find(detections);
-        if ~isempty(det_k)
-            det_snr  = arrayfun(@(k) resp(CUTIdx(1,k), CUTIdx(2,k)), det_k);
-            [~, ord] = sort(det_snr, 'descend');
-            det_k    = det_k(ord(1:min(30, numel(ord))));
+        % training window 평균을 conv2 로 한 번에 (셀별 루프 제거 → 2s→~0.3s)
+        win    = 2*(gb+tb) + 1;
+        kernel = ones(win, win);
+        kernel(tb+1:tb+2*gb+1, tb+1:tb+2*gb+1) = 0;     % guard+CUT 제외
+        nTrain = sum(kernel(:));
+        noise  = conv2(resp, kernel, 'same') / nTrain;
+        alpha  = nTrain * (Pfa^(-1/nTrain) - 1);        % CA-CFAR threshold factor
+        detmask = resp > alpha * noise;
+        % 가장자리(window 부족) + range 0.3~6m 게이트
+        detmask([1:margin, nR-margin+1:nR], :) = false;
+        detmask(:, [1:margin, nD-margin+1:nD]) = false;
+        rgrid   = repmat(rangeGrid(:), 1, nD);
+        detmask = detmask & (rgrid >= 0.3) & (rgrid <= 6.0);
+
+        [rIdxs, dIdxs] = find(detmask);
+        % 반사 강한 상위 30개만 angle 처리 (노이즈 약한 검출 제외)
+        if ~isempty(rIdxs)
+            snr = resp(sub2ind([nR, nD], rIdxs, dIdxs));
+            [~, ord] = sort(snr, 'descend');
+            sel = ord(1:min(30, numel(ord)));
+            rIdxs = rIdxs(sel); dIdxs = dIdxs(sel);
         end
 
         targets = struct('range_m', {}, 'velocity_mps', {}, 'azimuth_deg', {});
-        for ki = 1:numel(det_k)
-            k    = det_k(ki);
-            rIdx = CUTIdx(1, k);
-            dIdx = CUTIdx(2, k);
+        for i = 1:numel(rIdxs)
+            rIdx = rIdxs(i);
+            dIdx = dIdxs(i);
             sv = zeros(4, 1);
             for rx = 1:4
                 sv(rx) = rdMaps(rIdx, dIdx, rx);

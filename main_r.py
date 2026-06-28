@@ -124,6 +124,7 @@ def live_update_loop(cam_cfg):
     cam_h = cam_cfg.get("height", 1080)
     inferring = {}   # obj_name → bool
     _last_fusion = 0.0   # [Fusion] 콘솔 출력 throttle (1초)
+    _range_ema = {}      # obj_name → 평활된 거리 (노이즈 완화)
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -175,6 +176,12 @@ def live_update_loop(cam_cfg):
                 # 레이더 거리/방위/속도 매칭 (bbox 가로 범위 안 target)
                 radar = match_one(targets, best["bbox"], cam_cfg)
                 if radar:
+                    # 거리 시간평균(EMA) — 노이즈로 튀는 거리 완화 (60% 이전 + 40% 신규)
+                    _k = obj_dir.name
+                    _prev = _range_ema.get(_k)
+                    if _prev is not None:
+                        radar["range_m"] = round(0.6 * _prev + 0.4 * radar["range_m"], 3)
+                    _range_ema[_k] = radar["range_m"]
                     best.update(radar)   # range_m, azimuth_deg, velocity_mps
                     fusion_lines.append(
                         f"[Fusion] {obj_dir.name:12} {radar['range_m']:6.2f}m | "
