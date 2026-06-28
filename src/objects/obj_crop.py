@@ -138,12 +138,8 @@ def crop_objects():
 
     # SAM2 는 crop 단계에서만 쓰므로 GPU 에서 내림 (VRAM 반환)
     del sam2
-    try:
-        import torch
-        torch.cuda.empty_cache()
-        print("[VRAM] SAM2 언로드 (VRAM 반환)")
-    except Exception:
-        pass
+    from src.utils.gpu_scheduler import GPUManager
+    GPUManager.release("SAM2")
 
     return objects
 

@@ -70,10 +70,7 @@ class GPUScheduler:
 
 
 def vram_free_mb():
-    """현재 GPU 여유 VRAM(MB). torch/CUDA 없으면 None.
-
-    워커에서 무거운 작업 전 여유 확인용 (연결 시 활용 예정).
-    """
+    """현재 GPU 여유 VRAM(MB). torch/CUDA 없으면 None."""
     try:
         import torch
         if torch.cuda.is_available():
@@ -82,6 +79,59 @@ def vram_free_mb():
     except Exception:
         pass
     return None
+
+
+class GPUManager:
+    """GPU 메모리/모델 생명주기 일원화.
+
+    각 단계가 직접 torch.empty_cache()/ComfyUI free 를 호출하지 않고
+    여기로 모은다. "이 모델 다 썼어" → release() 한 줄이면 됨.
+      - 로컬 torch 모델(SAM2 등): del 후 release() → empty_cache
+      - ComfyUI(ESRGAN/DA3): release(comfyui=True) → /free API
+    """
+    COMFYUI_URL = "http://127.0.0.1:8188"
+
+    @staticmethod
+    def empty_cache():
+        try:
+            import torch
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+    @classmethod
+    def free_comfyui(cls):
+        """ComfyUI 가 캐시한 모델 언로드 + VRAM 반환."""
+        import json
+        import urllib.request
+        try:
+            req = urllib.request.Request(
+                f"{cls.COMFYUI_URL}/free",
+                data=json.dumps({"unload_models": True, "free_memory": True}).encode("utf-8"),
+                headers={"Content-Type": "application/json"}, method="POST")
+            urllib.request.urlopen(req, timeout=15)
+            print("[VRAM] ComfyUI 모델 언로드 (ESRGAN/DA3)")
+        except Exception as e:
+            print(f"[VRAM] ComfyUI free 실패(무시): {e}")
+
+    @classmethod
+    def release(cls, label="", comfyui=False):
+        """다 쓴 GPU 리소스 반환. torch 캐시 + (옵션)ComfyUI 언로드.
+
+        호출 예:
+          del sam2; GPUManager.release("SAM2")
+          GPUManager.release("ESRGAN/DA3", comfyui=True)
+        """
+        if comfyui:
+            cls.free_comfyui()
+        cls.empty_cache()
+        free = vram_free_mb()
+        tag  = f"{label} " if label else ""
+        if free is not None:
+            print(f"[VRAM] {tag}반환 (여유 {free/1024:.1f}GB)")
+        elif label:
+            print(f"[VRAM] {tag}반환")
 
 
 # 모듈 전역 싱글턴 — 필요한 곳에서 import 해서 submit
