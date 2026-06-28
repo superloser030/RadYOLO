@@ -33,6 +33,8 @@ CLI_PORT       = _dca["cli_port"]
 CLI_BAUD       = _dca["cli_baud"]
 RESTART_AT_SEQ = _dca["restart_at_seq"]
 
+VERBOSE = _sender["mode"].get("verbose", False)
+
 DCA_ROOT       = PROJECT_ROOT / "tools" / "dca1000"
 CLI_EXE        = DCA_ROOT / "DCA1000EVM_CLI_Control.exe"
 CLI_RECORD_EXE = DCA_ROOT / "DCA1000EVM_CLI_Record.exe"
@@ -78,7 +80,7 @@ def dca_cli_background(cmd):
 def monitor_record_proc(proc):
     for line in proc.stdout:
         line = line.strip()
-        if line:
+        if line and VERBOSE:
             print(f"[Record] {line}")
         if "Record is completed" in line or "Timeout Error" in line:
             print("[Record] 종료 감지 → 즉시 재시작 트리거")
@@ -123,8 +125,8 @@ def send_radar_config(num_loops, frame_period_01ms):
     print("[UART] 레이더 설정 완료.")
 
 
-def send_meta(level: dict):
-    """레벨 메타를 데스크톱(META_PORT)으로 TCP 전송 → 데스크톱이 .mat 생성.
+def send_meta(level: dict) -> bool:
+    """레벨 메타를 데스크톱(META_PORT)으로 TCP 전송. 성공 시 True.
 
     데스크톱은 이 값으로 iqData_RecordingParameters.mat 의 NumChirps 와
     .bin 프레임 크기를 맞춘다.
@@ -142,9 +144,22 @@ def send_meta(level: dict):
     try:
         with socket.create_connection((DESKTOP_IP, META_PORT), timeout=5) as s:
             s.sendall(json.dumps(meta).encode("utf-8"))
-        print(f"[Meta] 전송 완료 → {DESKTOP_IP}:{META_PORT}  NumChirps={meta['NumChirps']}")
-    except OSError as e:
-        print(f"[Meta] 전송 실패 ({e}) — 데스크톱이 default_chirp 로 동작")
+        return True
+    except OSError:
+        return False
+
+
+def meta_sender_loop(level: dict):
+    """데스크톱이 받을 때까지 메타를 3초 간격으로 재전송 (백그라운드)."""
+    waiting = False
+    while True:
+        if send_meta(level):
+            print(f"[Meta] 전달 완료  NumChirps={level['chirp']}")
+            return
+        if not waiting:
+            print("[Meta] 데스크톱 대기 중... (받을 때까지 재시도)")
+            waiting = True
+        time.sleep(3)
 
 
 def start_record_with_monitor():
@@ -188,6 +203,9 @@ def radar_forward():
 
     print(f"[Radar] 수신 대기 중 → {DESKTOP_IP}:{RADAR_PORT}")
     seq = 0
+    _last_report = time.time()
+    _bytes_acc   = 0
+    _pkt_acc     = 0
     try:
         while True:
             if restart_event.is_set():
@@ -207,8 +225,19 @@ def radar_forward():
 
             header = struct.pack('>II', seq, _ts_ms())
             fwd_sock.sendto(header + chunk, (DESKTOP_IP, RADAR_PORT))
-            print(f"[Radar] seq={seq:>6}  size={len(chunk):>5}B  {chunk[:16].hex()}")
             seq += 1
+
+            if VERBOSE:
+                print(f"[Radar] seq={seq:>6}  size={len(chunk):>5}B  {chunk[:16].hex()}")
+            else:
+                _bytes_acc += len(chunk)
+                _pkt_acc   += 1
+                _now = time.time()
+                if _now - _last_report >= 1.0:
+                    _mbps = _bytes_acc * 8 / 1e6 / (_now - _last_report)
+                    print(f"[Radar] {_pkt_acc:>4} pkt/s | {_mbps:5.1f} Mbps | seq {seq}")
+                    _last_report = _now
+                    _bytes_acc = _pkt_acc = 0
 
             if seq == RESTART_AT_SEQ:
                 print(f"[Radar] seq {RESTART_AT_SEQ} 도달. 선제적 재시작...")
@@ -240,6 +269,10 @@ def webcam_send(fps, quality, width, height):
     print(f"[Webcam] 전송 시작 → {DESKTOP_IP}:{WEBCAM_PORT}  "
           f"({fps}fps, {act_w}x{act_h} 요청 {width}x{height}, quality={quality})")
 
+    _last_report = time.time()
+    _bytes_acc   = 0
+    _frame_acc   = 0
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -258,6 +291,17 @@ def webcam_send(fps, quality, width, height):
             sock.sendto(header + chunk, (DESKTOP_IP, WEBCAM_PORT))
 
         frame_id += 1
+
+        _bytes_acc += len(data)
+        _frame_acc += 1
+        _now = time.time()
+        if _now - _last_report >= 1.0:
+            _mbps = _bytes_acc * 8 / 1e6 / (_now - _last_report)
+            print(f"[Webcam] {_frame_acc:>3} fps | {_mbps:5.1f} Mbps | "
+                  f"{len(data)//1024}KB/frame")
+            _last_report = _now
+            _bytes_acc = _frame_acc = 0
+
         time.sleep(interval)
 
     cap.release()
@@ -326,7 +370,8 @@ def run(transmit_mode: int):
     threads = []
 
     if transmit_mode == 1:
-        send_meta(lv)                       # 데스크톱이 .mat 생성하도록 메타 먼저 전송
+        # 메타는 데스크톱이 받을 때까지 백그라운드 재전송 (순서 무관)
+        threads.append(threading.Thread(target=meta_sender_loop, args=(lv,), daemon=True))
         dca_cli("fpga")
         dca_cli("record")
         send_radar_config(lv["num_loops"], lv["frame_period_01ms"])

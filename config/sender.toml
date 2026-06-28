@@ -67,6 +67,7 @@ chirp_cycle_us    = 486.14   # idleTime + rampEndTime
 
 # ─── MODE ────────────────────────────────────────
 [mode]
-sender_mode   = 0    # 0 = 고정(fixed_level 사용)   1 = 자동 대역폭 측정
-fixed_level   = 8    # mode 0 일 때 사용할 레벨 (위 테이블 1~10)
-bw_target_pct = 80   # mode 1 일 때: 측정 대역폭의 몇 % 까지 사용할지
+sender_mode   = 0     # 0 = 고정(fixed_level 사용)   1 = 자동 대역폭 측정
+fixed_level   = 8     # mode 0 일 때 사용할 레벨 (위 테이블 1~10)
+bw_target_pct = 80    # mode 1 일 때: 측정 대역폭의 몇 % 까지 사용할지
+verbose       = false # true = 패킷별 상세 로그   false = 1초마다 요약만
