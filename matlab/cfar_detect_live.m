@@ -11,8 +11,8 @@ outputFile     = "D:\projects\RadYOLO\data\radar\targets.json";
 tmpFile        = "D:\projects\RadYOLO\data\radar\targets.json.tmp";
 tsFile         = fullfile(recordLocation, 'iqData_timestamps.csv');
 
-K_RECENT = 5;     % 매 폴링마다 처리할 최근 프레임 수 (지연 줄이려 축소)
-POLL_SEC = 0.3;   % 폴링 간격
+K_RECENT = 1;     % 최신 1프레임만 처리 (지연 최소화 — 실시간 매칭용)
+POLL_SEC = 0.2;   % 폴링 간격
 
 % ── 파라미터 로드 (1회) ─────────────────────────────
 temp = load(fullfile(recordLocation, 'iqData_RecordingParameters.mat'));
@@ -41,10 +41,10 @@ rdresp = phased.RangeDopplerResponse( ...
     'DopplerFFTLength',       ndop, ...
     'ReferenceRangeCentered', false);
 
-% PFA 1e-7 + 밴드 확대: det 160개(노이즈 과다)를 수십 개로 줄여 처리/지연 감소
-cfar2D = phased.CFARDetector2D('GuardBandSize', 8, 'TrainingBandSize', 16, ...
-    'ProbabilityFalseAlarm', 1e-7);
-gb = 8; tb = 16; margin = gb + tb;
+% 밴드 원복(확대는 CFAR window 커져 처리 4초로 느려진 역효과). PFA 1e-6 유지.
+cfar2D = phased.CFARDetector2D('GuardBandSize', 5, 'TrainingBandSize', 10, ...
+    'ProbabilityFalseAlarm', 1e-6);
+gb = 5; tb = 10; margin = gb + tb;
 
 fprintf('실시간 CFAR 시작 (Ctrl+C 로 종료)\n');
 
