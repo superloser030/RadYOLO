@@ -11,7 +11,7 @@ outputFile     = "D:\projects\RadYOLO\data\radar\targets.json";
 tmpFile        = "D:\projects\RadYOLO\data\radar\targets.json.tmp";
 tsFile         = fullfile(recordLocation, 'iqData_timestamps.csv');
 
-K_RECENT = 10;    % 매 폴링마다 처리할 최근 프레임 수
+K_RECENT = 5;     % 매 폴링마다 처리할 최근 프레임 수 (지연 줄이려 축소)
 POLL_SEC = 0.3;   % 폴링 간격
 
 % ── 파라미터 로드 (1회) ─────────────────────────────
@@ -41,19 +41,22 @@ rdresp = phased.RangeDopplerResponse( ...
     'DopplerFFTLength',       ndop, ...
     'ReferenceRangeCentered', false);
 
+% PFA 강화(1e-5 → 1e-6): 검출 213개처럼 노이즈 과검출 줄이고 처리 부하 감소
 cfar2D = phased.CFARDetector2D('GuardBandSize', 5, 'TrainingBandSize', 10, ...
-    'ProbabilityFalseAlarm', 1e-5);
+    'ProbabilityFalseAlarm', 1e-6);
 gb = 5; tb = 10; margin = gb + tb;
 
 fprintf('실시간 CFAR 시작 (Ctrl+C 로 종료)\n');
 
 while true
+    t_poll = tic;
     % 매 폴링마다 reader 재생성 → 새로 추가된 .bin/프레임 반영
     try
         fr = dca1000FileReader(recordLocation = recordLocation);
     catch
         pause(POLL_SEC); continue;
     end
+    t_reader = toc(t_poll);   % reader 재생성 시간 (병목 진단용)
     N = fr.NumDataCubes;
     if N < 2
         pause(POLL_SEC); continue;   % 아직 프레임 부족
@@ -164,6 +167,20 @@ while true
     if ~moved
         warning('targets.json movefile 실패 (계속 잠김). 다음 폴링에 재시도.');
     end
+
+    % ── 진단: reader/처리 시간 + 검출수 + 지연(현재시각 - 마지막프레임 ts) ──
+    elapsed = toc(t_poll);
+    nowdt   = datetime('now');
+    now_ms  = (hour(nowdt)*3600 + minute(nowdt)*60 + second(nowdt)) * 1000;
+    last_ts = 0; n_last = 0;
+    if ~isempty(frameResults)
+        last_ts = frameResults{end}.ts_ms;
+        tt = frameResults{end}.targets;
+        if isstruct(tt), n_last = numel(tt); end
+    end
+    lag = (now_ms - last_ts) / 1000;
+    fprintf('[CFAR] frame %d~%d | reader %.2fs total %.2fs | %d det | lag %.1fs\n', ...
+        startIdx, lastIdx, t_reader, elapsed, n_last, lag);
 
     pause(POLL_SEC);
 end

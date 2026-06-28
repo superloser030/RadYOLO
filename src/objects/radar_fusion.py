@@ -26,7 +26,7 @@ def azimuth_to_x(azimuth_deg: float, cam: dict) -> float:
 _last_targets = []   # 읽기 실패(쓰는 중/잠김) 시 직전 값 유지
 
 
-def load_latest_targets(path, ts_ms=None, tol_ms=500):
+def load_latest_targets(path, ts_ms=None, tol_ms=1500):
     """targets.json 에서 ts 에 가장 가까운 프레임의 targets 반환.
 
     ts_ms=None → 최신 프레임. ts 차이가 tol_ms 초과면 [] (동기 실패).
