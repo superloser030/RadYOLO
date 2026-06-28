@@ -17,6 +17,7 @@ WEBCAM_PORT = _net["webcam_port"]
 META_PORT   = _net["meta_port"]
 
 shutdown_event     = threading.Event()
+_chirp_ready       = threading.Event()   # 메타로 chirp 확정 전엔 .bin 저장 보류
 frame_queue        = queue.Queue(maxsize=30)
 _latest_frame      = None
 _latest_frame_ts   = 0   # ms since midnight (sender 기준)
@@ -157,7 +158,8 @@ def radar_receive():
         _matlab_sock.sendto(payload, ("127.0.0.1", _MATLAB_PORT))
 
         # DCA1000 헤더(10B) 제거 후 ADC 바이트 누적 → 프레임 단위 .bin 저장
-        if _SAVE_RADAR:
+        # 메타로 chirp 확정 전엔 보류 (프레임 크기를 몰라 깨진 .bin 방지)
+        if _SAVE_RADAR and _chirp_ready.is_set():
             adc_bytes = payload[_DCA_HDR_SIZE:]
             with _bin_lock:
                 global _current_ts_ms
@@ -228,6 +230,7 @@ def set_chirp(num_chirps: int, samples_per_chirp: int = 256, num_receivers: int 
     """chirp 수 변경에 맞춰 .bin 프레임 크기 갱신 (samples×rx×chirp×4byte)."""
     global _BIN_FRAME_SIZE
     _BIN_FRAME_SIZE = samples_per_chirp * num_receivers * num_chirps * 4
+    _chirp_ready.set()   # 이제부터 .bin 저장 허용
     print(f"[Meta] chirp={num_chirps} → bin frame size={_BIN_FRAME_SIZE}B")
 
 

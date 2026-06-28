@@ -87,14 +87,32 @@ def monitor_record_proc(proc):
             restart_event.set()
 
 
+def _send_and_wait(ser, command, timeout=2.0):
+    """명령 전송 후 'Done'/'Error'/프롬프트가 올 때까지 대기. 응답 문자열 반환.
+
+    고정 sleep(0.05) 대신 응답을 기다려 명령 유실(partial config)을 방지.
+    """
+    ser.reset_input_buffer()
+    ser.write((command + '\r\n').encode('utf-8'))
+    deadline = time.time() + timeout
+    resp = ""
+    while time.time() < deadline:
+        line = ser.readline().decode('utf-8', errors='ignore')
+        if not line:
+            continue
+        resp += line
+        if "Done" in line or "Error" in line:
+            break
+    return resp.strip()
+
+
 def uart_send_commands(commands):
     import serial
-    with serial.Serial(CLI_PORT, CLI_BAUD, timeout=1) as ser:
+    with serial.Serial(CLI_PORT, CLI_BAUD, timeout=0.3) as ser:
         for command in commands:
-            ser.write((command + '\r\n').encode('utf-8'))
-            time.sleep(0.05)
-            response = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
-            print(f"  Send: {command:<30} | {response.strip()}")
+            resp = _send_and_wait(ser, command)
+            tail = resp.splitlines()[-1] if resp else ""
+            print(f"  Send: {command:<30} | {tail}")
 
 
 def send_radar_config(num_loops, frame_period_01ms):
@@ -105,7 +123,7 @@ def send_radar_config(num_loops, frame_period_01ms):
     """
     import serial
     print(f"[UART] {CLI_PORT} 연결 중...")
-    with serial.Serial(CLI_PORT, CLI_BAUD, timeout=1) as ser:
+    with serial.Serial(CLI_PORT, CLI_BAUD, timeout=0.3) as ser:
         print(f"[UART] .cfg 전송 (numLoops={num_loops}, framePeriod={frame_period_01ms*0.1:.1f}ms)")
         with open(RADAR_CFG, 'r') as f:
             lines = f.readlines()
@@ -118,10 +136,11 @@ def send_radar_config(num_loops, frame_period_01ms):
                 parts[3] = str(num_loops)          # numLoops
                 parts[5] = str(frame_period_01ms)  # framePeriodicity (0.1ms 단위)
                 command = ' '.join(parts)
-            ser.write((command + '\r\n').encode('utf-8'))
-            time.sleep(0.05)
-            response = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
-            print(f"  Send: {command:<30} | {response.strip()}")
+            resp = _send_and_wait(ser, command)
+            tail = resp.splitlines()[-1] if resp else ""
+            print(f"  Send: {command:<45} | {tail}")
+            if "Error" in resp:
+                print(f"  [경고] '{command.split()[0]}' 에러 응답 — 설정 실패 가능")
     print("[UART] 레이더 설정 완료.")
 
 
@@ -150,16 +169,22 @@ def send_meta(level: dict) -> bool:
 
 
 def meta_sender_loop(level: dict):
-    """데스크톱이 받을 때까지 메타를 3초 간격으로 재전송 (백그라운드)."""
-    waiting = False
+    """메타를 주기적으로 재전송 (백그라운드).
+
+    데스크톱이 도중에 재시작돼도 자동 복구.
+    대기 중: 3초 간격 / 전달 후: 10초 간격 유지.
+    """
+    sent = False
     while True:
         if send_meta(level):
-            print(f"[Meta] 전달 완료  NumChirps={level['chirp']}")
-            return
-        if not waiting:
-            print("[Meta] 데스크톱 대기 중... (받을 때까지 재시도)")
-            waiting = True
-        time.sleep(3)
+            if not sent:
+                print(f"[Meta] 전달 완료  NumChirps={level['chirp']}")
+                sent = True
+        else:
+            if sent:
+                print("[Meta] 데스크톱 응답 없음 — 재전송 중")
+            sent = False
+        time.sleep(10 if sent else 3)
 
 
 def start_record_with_monitor():
@@ -187,8 +212,10 @@ def restart_radar():
     except RuntimeError:
         pass
 
-    print("[UART] sensorStop → sensorStart 0 전송 중...")
-    uart_send_commands(["sensorStop", "sensorStart 0"])
+    # 직전 .cfg 가 그대로 유지된 상태이므로 인자 없는 sensorStart 로 재시작
+    # ("sensorStart 0" 은 새 config 가 들어온 상태에서 펌웨어가 거부함)
+    print("[UART] sensorStop → sensorStart 전송 중...")
+    uart_send_commands(["sensorStop", "sensorStart"])
 
     start_record_with_monitor()
     print("[Radar] 재시작 완료.")
