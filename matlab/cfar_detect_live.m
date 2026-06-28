@@ -114,28 +114,39 @@ while true
         % CFAR (RX1 기준)
         resp = abs(rdMaps(:,:,1)).^2;
         [nR, nD] = size(resp);
-        [columnInds, rowInds] = meshgrid(margin+1:nD-margin, margin+1:nR-margin);
+        % range 0.3~6m 범위 bin 만 CUT (실내 밖 먼 노이즈 제거 + 처리 가속)
+        rValid = find(rangeGrid >= 0.3 & rangeGrid <= 6.0);
+        rValid = rValid(rValid > margin & rValid <= nR - margin);
+        [columnInds, rowInds] = meshgrid(margin+1:nD-margin, rValid);
         CUTIdx     = [rowInds(:) columnInds(:)]';
         detections = cfar2D(resp, CUTIdx);
 
+        % 검출된 셀 중 반사 강한(SNR 높은) 상위 N개만 angle 처리
+        % → 약한 노이즈 검출 제외 (거리 안정화 + angle FFT 부하 감소)
+        det_k = find(detections);
+        if ~isempty(det_k)
+            det_snr  = arrayfun(@(k) resp(CUTIdx(1,k), CUTIdx(2,k)), det_k);
+            [~, ord] = sort(det_snr, 'descend');
+            det_k    = det_k(ord(1:min(30, numel(ord))));
+        end
+
         targets = struct('range_m', {}, 'velocity_mps', {}, 'azimuth_deg', {});
-        for k = 1:length(detections)
-            if detections(k)
-                rIdx = CUTIdx(1, k);
-                dIdx = CUTIdx(2, k);
-                sv = zeros(4, 1);
-                for rx = 1:4
-                    sv(rx) = rdMaps(rIdx, dIdx, rx);
-                end
-                angleSpec    = abs(fftshift(fft(sv, nAngle)));
-                [~, peakIdx] = max(angleSpec);
-                sin_theta    = (peakIdx - nAngle/2 - 1) / (nAngle/2);
-                sin_theta    = max(-1, min(1, sin_theta));
-                theta_deg    = asind(sin_theta);
-                targets(end+1).range_m    = rangeGrid(rIdx);
-                targets(end).velocity_mps = speedGrid(dIdx);
-                targets(end).azimuth_deg  = theta_deg;
+        for ki = 1:numel(det_k)
+            k    = det_k(ki);
+            rIdx = CUTIdx(1, k);
+            dIdx = CUTIdx(2, k);
+            sv = zeros(4, 1);
+            for rx = 1:4
+                sv(rx) = rdMaps(rIdx, dIdx, rx);
             end
+            angleSpec    = abs(fftshift(fft(sv, nAngle)));
+            [~, peakIdx] = max(angleSpec);
+            sin_theta    = (peakIdx - nAngle/2 - 1) / (nAngle/2);
+            sin_theta    = max(-1, min(1, sin_theta));
+            theta_deg    = asind(sin_theta);
+            targets(end+1).range_m    = rangeGrid(rIdx);
+            targets(end).velocity_mps = speedGrid(dIdx);
+            targets(end).azimuth_deg  = theta_deg;
         end
 
         frameData.frame_idx = fIdx - 1;
