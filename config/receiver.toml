@@ -1,0 +1,17 @@
+# ════════════════════════════════════════════════
+#  RECEIVER  —  데스크톱(forlife / loser)에서 실행
+#  수신 + 파이프라인. IP/포트는 network.toml 참조.
+# ════════════════════════════════════════════════
+
+[pipeline]
+delay_ms = 700        # 라이브 루프 파이프라인 지연 보정 (레이더-웹캠 동기)
+
+[storage]
+save_webcam = true    # data/webcam/ 에 전 프레임 저장 (frame_NNNNNN.jpg + csv)
+save_radar  = true    # data/radar/  에 .bin 프레임 저장
+show_live   = true    # 'Webcam Live' 미리보기 창 표시 (q 로 종료)
+
+[radar]
+# 수신측 .bin 프레임 크기 결정용 chirp 수.
+# 센더가 meta(TCP)로 알려주기 전까지 쓰는 기본값. (samples256×rx4×chirp×4byte)
+default_chirp = 32

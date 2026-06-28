@@ -3,80 +3,36 @@ import sys
 import json
 import shutil
 import threading
+import subprocess
 import webbrowser
 import http.server
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
-
-def archive_data():
-    data_dir = PROJECT_ROOT / "data"
-    archive_base = PROJECT_ROOT / "archive"
-    archive_base.mkdir(exist_ok=True)
-    if not data_dir.exists():
-        return
-
-    # model_trellis.glb + templates/ 는 보존 (Trellis/포즈 자산)
-    KEEP = ["model_trellis.glb", "templates"]
-    saved = {}   # rel_path → bytes (글로벌 파일) 또는 dir_path
-    objects_dir = data_dir / "objects"
-    if objects_dir.exists():
-        for obj_dir in objects_dir.iterdir():
-            if not obj_dir.is_dir():
-                continue
-            glb = obj_dir / "model_trellis.glb"
-            tmpl = obj_dir / "templates"
-            if glb.exists():
-                saved[obj_dir.name + "/model_trellis.glb"] = glb.read_bytes()
-            if tmpl.exists():
-                # templates/ 전체 복사 (in-memory 대신 임시 위치)
-                tmp = archive_base / f"_tmp_templates_{obj_dir.name}"
-                if tmp.exists():
-                    shutil.rmtree(tmp)
-                shutil.copytree(str(tmpl), str(tmp))
-                saved[obj_dir.name + "/__templates__"] = tmp
-
-    idx = 1
-    while (archive_base / f"data_{idx:03d}").exists():
-        idx += 1
-    dest = archive_base / f"data_{idx:03d}"
-    shutil.move(str(data_dir), str(dest))
-    print(f"[Archive] data/ → archive/data_{idx:03d}")
-
-    # 보존 파일 복원
-    if saved:
-        new_objects = data_dir / "objects"
-        new_objects.mkdir(parents=True, exist_ok=True)
-        for rel, payload in saved.items():
-            obj_name, fname = rel.split("/", 1)
-            obj_dir = new_objects / obj_name
-            obj_dir.mkdir(exist_ok=True)
-            if fname == "__templates__":
-                shutil.copytree(str(payload), str(obj_dir / "templates"))
-                shutil.rmtree(payload)
-            else:
-                (obj_dir / fname).write_bytes(payload)
-        print(f"[Archive] GLB/templates 보존: {list(saved.keys())}")
-sys.path.insert(0, str(PROJECT_ROOT / "src" / "transmission"))
-sys.path.insert(0, str(PROJECT_ROOT / "src" / "background"))
-sys.path.insert(0, str(PROJECT_ROOT / "src" / "objects"))
-
-import receiver
-from receiver  import radar_receive, webcam_receive
-from bg_select import select_background
-from upscale   import upscale_image
-from depth     import generate_depth
-from yolo_mask import generate_mask
-from obj_crop  import crop_objects
-from trellis_gen import generate_3d
+from src.utils.archive import (
+    archive_data,
+    record_session_start,
+    record_session_end,
+    start_heartbeat_thread,
+)
+from src.utils.config import load_camera, export_camera_json
+from src.transmission import receiver
+from src.transmission.receiver  import radar_receive, webcam_receive, meta_receive
+from src.background.bg_select   import select_background
+from src.background.upscale     import upscale_image
+from src.background.depth            import generate_depth
+from src.background.depth_calibration import calibrate_depth
+from src.background.yolo_mask   import generate_mask
+from src.objects.obj_crop       import crop_objects
+from src.objects.trellis_gen    import generate_3d
 
 
 def estimate_object_poses():
     """GLB 모델이 있는 객체에 대해 GigaPose로 포즈 추정 후 pose.json + manifest.json 저장."""
-    from pose_estimator import prepare_templates, estimate_pose
+    from src.objects.pose_estimator import prepare_templates, estimate_pose
 
-    cam_cfg    = json.loads((PROJECT_ROOT / "config" / "camera.json").read_text())
+    cam_cfg    = load_camera()
     camera_k   = [cam_cfg["fx"], cam_cfg["fy"], cam_cfg["cx"], cam_cfg["cy"]]
     bg_image   = str(PROJECT_ROOT / "data" / "scene" / "background.jpg")
     objects_dir = PROJECT_ROOT / "data" / "objects"
@@ -136,7 +92,7 @@ def estimate_object_poses():
 
 def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
     """백그라운드 스레드: GigaPose 추론 → pose.json 갱신 (회전/깊이)."""
-    from pose_estimator import estimate_pose
+    from src.objects.pose_estimator import estimate_pose
     template_dir = str(obj_dir / "templates")
     if not (obj_dir / "templates" / "meta.json").exists():
         return
@@ -227,7 +183,20 @@ def live_update_loop(cam_cfg):
         time.sleep(0.3)
 
 
-def serve_and_open(port=8000):
+def _start_iperf_server():
+    """센더 mode 1(자동 대역폭) 측정용 iperf3 -s 상시 서버. iperf3 없으면 None."""
+    try:
+        proc = subprocess.Popen(
+            ["iperf3", "-s"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("[BW] iperf3 서버 시작 (포트 5201) — 센더 mode 1 측정 대기")
+        return proc
+    except FileNotFoundError:
+        print("[BW] iperf3 미설치 — 센더 mode 1 불가 (센더는 mode 0 사용 권장)")
+        return None
+
+
+def _start_viewer(port=8000):
     os.chdir(PROJECT_ROOT)
     server = http.server.HTTPServer(
         ("localhost", port),
@@ -235,9 +204,10 @@ def serve_and_open(port=8000):
     )
     url = f"http://localhost:{port}/src/viewer/viewer.html"
     threading.Timer(0.5, lambda: webbrowser.open(url)).start()
-    print(f"[Server] {url}")
-    print("[Server] Ctrl+C로 종료")
-    server.serve_forever()
+    print(f"\n=== 뷰어 시작 ===")
+    print(f"[Server] {url}  (Ctrl+C로 종료)")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    return server
 
 
 if __name__ == "__main__":
@@ -245,16 +215,28 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--skip-bg",    action="store_true", help="배경 촬영 건너뜀 (background_raw.jpg 이미 있을 때)")
     parser.add_argument("--skip-depth", action="store_true", help="DA3 건너뜀 (depth.png 이미 있을 때)")
+    parser.add_argument("--skip-3d",    action="store_true", help="Trellis 3D 모델 생성 건너뜀")
+    parser.add_argument("--skip-calib", action="store_true", help="레이더 기반 depth 보정 건너뜀")
     parser.add_argument("--viewer-only", action="store_true", help="뷰어만 시작")
     args = parser.parse_args()
+
+    cam_cfg = load_camera()
+    export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")  # viewer 용
+    _http_server = None
+    _iperf_proc  = None
 
     if not args.viewer_only:
         print("=== 이전 data/ 아카이브 중 ===")
         archive_data()
+        record_session_start()
+        start_heartbeat_thread()
 
-        # receiver 스레드 시작 (sender에서 오는 프레임/레이더 수신)
+        _iperf_proc = _start_iperf_server()
+
+        t_meta   = threading.Thread(target=meta_receive,   daemon=True)
         t_radar  = threading.Thread(target=radar_receive,  daemon=True)
         t_webcam = threading.Thread(target=webcam_receive, daemon=True)
+        t_meta.start()
         t_radar.start()
         t_webcam.start()
 
@@ -264,8 +246,13 @@ if __name__ == "__main__":
         else:
             print("=== Step 1: 건너뜀 (--skip-bg) ===")
 
-        print("\n=== Step 2: ESRGAN 업스케일 ===")
-        upscale_image()
+        _http_server = _start_viewer()
+
+        if not args.skip_bg:
+            print("\n=== Step 2: ESRGAN 업스케일 ===")
+            upscale_image()
+        else:
+            print("\n=== Step 2: 건너뜀 (--skip-bg) ===")
 
         if not args.skip_depth:
             print("\n=== Step 3: DA3 깊이 추정 ===")
@@ -273,26 +260,42 @@ if __name__ == "__main__":
         else:
             print("\n=== Step 3: 건너뜀 (--skip-depth) ===")
 
+        if not args.skip_calib:
+            print("\n=== Step 3.5: 레이더 기반 depth 보정 ===")
+            calibrate_depth()
+        else:
+            print("\n=== Step 3.5: 건너뜀 (--skip-calib) ===")
+
         print("\n=== Step 4: YOLO 마스크 생성 ===")
         generate_mask()
 
         print("\n=== Step 5: 객체 크롭 + depth 마스크 정제 ===")
         crop_objects()
 
-        print("\n=== Step 5.3: Trellis 3D 모델 생성 ===")
-        objects_dir = PROJECT_ROOT / "data" / "objects"
-        if objects_dir.exists():
-            for obj_dir in sorted(objects_dir.iterdir()):
-                if obj_dir.is_dir() and (obj_dir / "cutout.jpg").exists():
-                    generate_3d(obj_dir)
+        if not args.skip_3d:
+            print("\n=== Step 5.3: Trellis 3D 모델 생성 ===")
+            objects_dir = PROJECT_ROOT / "data" / "objects"
+            if objects_dir.exists():
+                for obj_dir in sorted(objects_dir.iterdir()):
+                    if obj_dir.is_dir() and (obj_dir / "cutout.jpg").exists():
+                        generate_3d(obj_dir)
 
-        print("\n=== Step 5.5: GLB 모델 포즈 추정 ===")
-        estimate_object_poses()
+            print("\n=== Step 5.5: GLB 모델 포즈 추정 ===")
+            estimate_object_poses()
+        else:
+            print("\n=== Step 5.3/5.5: 건너뜀 (--skip-3d) ===")
 
-    print("\n=== Step 6: 뷰어 시작 ===")
-    cam_cfg = json.loads((PROJECT_ROOT / "config" / "camera.json").read_text())
-    if not args.viewer_only:
         t_live = threading.Thread(target=live_update_loop, args=(cam_cfg,), daemon=True)
         t_live.start()
         print("[Live] YOLO 위치 / GigaPose 회전 갱신 스레드 시작")
-    serve_and_open()
+
+    else:
+        _http_server = _start_viewer()
+
+    try:
+        _http_server.serve_forever()
+    finally:
+        record_session_end()
+        receiver.close_bin_file()
+        if _iperf_proc is not None:
+            _iperf_proc.terminate()

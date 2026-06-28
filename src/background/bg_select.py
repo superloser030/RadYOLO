@@ -1,15 +1,12 @@
-import sys
 import time
 import numpy as np
 import cv2
 from pathlib import Path
 from ultralytics import YOLO
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "src" / "transmission"))
+from src.transmission.receiver import frame_queue
 
-import receiver
-from receiver import frame_queue
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 MODEL_PATH   = PROJECT_ROOT / "models" / "yolo11x-seg.pt"
 OUTPUT_PATH  = PROJECT_ROOT / "data" / "scene" / "background_raw.jpg"
@@ -44,11 +41,14 @@ def _boundary_sharpness(frame, result) -> float:
     return float(np.mean(scores)) if scores else 0.0
 
 
+TS_PATH = PROJECT_ROOT / "data" / "scene" / "background_ts.txt"
+
+
 def select_background():
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     model = YOLO(str(MODEL_PATH))
 
-    frames, scores = [], []
+    frames, scores, timestamps = [], [], []
 
     print("[BG] sender에서 프레임 수신 대기 중...")
     try:
@@ -61,7 +61,7 @@ def select_background():
 
     while time.time() - start < CAPTURE_SECS:
         try:
-            frame = frame_queue.get(timeout=1.0)
+            frame, ts_ms = frame_queue.get(timeout=1.0)
         except Exception:
             continue
 
@@ -70,6 +70,7 @@ def select_background():
 
         frames.append(frame.copy())
         scores.append(score)
+        timestamps.append(ts_ms)
 
         elapsed = time.time() - start
         print(f"\r[BG] {elapsed:.1f}s / {CAPTURE_SECS}s  프레임: {len(frames)}  선명도: {score:.1f}", end="")
@@ -77,4 +78,5 @@ def select_background():
     print()
     best_idx = int(np.argmax(scores))
     cv2.imwrite(str(OUTPUT_PATH), frames[best_idx])
-    print(f"[BG] 저장 완료: {OUTPUT_PATH}  (score={scores[best_idx]:.1f}, frame={best_idx+1}/{len(frames)})")
+    TS_PATH.write_text(str(timestamps[best_idx]))
+    print(f"[BG] 저장 완료: {OUTPUT_PATH}  (score={scores[best_idx]:.1f}, frame={best_idx+1}/{len(frames)}, ts={timestamps[best_idx]})")

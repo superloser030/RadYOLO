@@ -12,13 +12,13 @@
       "precision": "auto",
       "attention": "auto"
     }
-  },
+  },  
   "3": {
     "class_type": "DepthAnything_V3",
     "inputs": {
       "da3_model": ["2", 0],
       "images": ["1", 0],
-      "normalization_mode": "V2-Style",
+      "normalization_mode": "Standard",
       "resize_method": "resize",
       "invert_depth": false,
       "keep_model_size": false

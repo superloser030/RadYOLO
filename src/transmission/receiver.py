@@ -9,8 +9,12 @@ from pathlib import Path
 import queue
 import time
 
-RADAR_PORT  = 5006
-WEBCAM_PORT = 5007
+from src.utils.config import load_network, load_receiver
+
+_net = load_network()
+RADAR_PORT  = _net["radar_port"]
+WEBCAM_PORT = _net["webcam_port"]
+META_PORT   = _net["meta_port"]
 
 shutdown_event     = threading.Event()
 frame_queue        = queue.Queue(maxsize=30)
@@ -24,18 +28,83 @@ _latest_radar_lock = threading.Lock()
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
-def load_config() -> dict:
-    path = _PROJECT_ROOT / "config" / "receiver.json"
-    if path.exists():
-        return json.loads(path.read_text())
-    return {"pipeline_delay_ms": 700, "matlab_radar_port": 5009}
+_cfg = load_receiver()
+pipeline_delay_ms: int = _cfg["pipeline"]["delay_ms"]
+_MATLAB_PORT: int      = _net["matlab_port"]
 
-
-_cfg = load_config()
-pipeline_delay_ms: int = _cfg["pipeline_delay_ms"]
-_MATLAB_PORT: int      = _cfg["matlab_radar_port"]
+_SAVE_WEBCAM = _cfg["storage"]["save_webcam"]
+_SAVE_RADAR  = _cfg["storage"]["save_radar"]
+_SHOW_LIVE   = _cfg["storage"]["show_live"]
 
 _matlab_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+# .bin 파일 저장 — chirp 수에 따라 프레임 크기 가변 (samples×rx×chirp×4byte)
+_DEFAULT_CHIRP  = _cfg["radar"]["default_chirp"]
+_BIN_FRAME_SIZE = 256 * 4 * _DEFAULT_CHIRP * 4
+_BIN_FILE_MAX   = 100 * 1024 * 1024   # 100 MB 초과 시 새 파일
+_DCA_HDR_SIZE   = 10                   # DCA1000 헤더: 4B seq + 6B byte count
+_RADAR_DIR      = _PROJECT_ROOT / "data" / "radar"
+_WEBCAM_DIR     = _PROJECT_ROOT / "data" / "webcam"
+
+_adc_buf        = bytearray()
+_bin_frame_idx  = 0
+_bin_file_idx   = 0
+_bin_file       = None
+_ts_file        = None
+_current_ts_ms  = 0
+_bin_lock       = threading.Lock()
+
+# 웹캠 프레임 저장 (레이더 .bin 과 동일한 구조: frame_NNNNNN.jpg + timestamps.csv)
+_webcam_frame_idx = 0
+_webcam_ts_file   = None
+_webcam_lock      = threading.Lock()
+
+
+def _write_webcam_frame(jpeg_bytes: bytes, ts_ms: int):
+    """수신한 JPEG 바이트를 재인코딩 없이 그대로 저장 + 타임스탬프 기록."""
+    global _webcam_frame_idx, _webcam_ts_file
+    _WEBCAM_DIR.mkdir(parents=True, exist_ok=True)
+    if _webcam_ts_file is None:
+        _webcam_ts_file = open(_WEBCAM_DIR / "webcam_timestamps.csv", "w")
+        _webcam_ts_file.write("frame_idx,ts_ms\n")
+    path = _WEBCAM_DIR / f"frame_{_webcam_frame_idx:06d}.jpg"
+    with open(path, "wb") as f:
+        f.write(jpeg_bytes)
+    _webcam_ts_file.write(f"{_webcam_frame_idx},{ts_ms}\n")
+    _webcam_ts_file.flush()
+    _webcam_frame_idx += 1
+
+
+def _write_bin_frame(frame_bytes: bytes, ts_ms: int):
+    global _bin_file, _bin_file_idx, _bin_frame_idx, _ts_file
+    _RADAR_DIR.mkdir(parents=True, exist_ok=True)
+    if _ts_file is None:
+        _ts_file = open(_RADAR_DIR / "iqData_timestamps.csv", "w")
+        _ts_file.write("frame_idx,ts_ms\n")
+    if _bin_file is None or _bin_file.tell() >= _BIN_FILE_MAX:
+        if _bin_file:
+            _bin_file.close()
+        path = _RADAR_DIR / f"iqData_Raw_{_bin_file_idx}.bin"
+        _bin_file = open(path, "ab")
+        _bin_file_idx += 1
+    _bin_file.write(frame_bytes)
+    _bin_file.flush()
+    _ts_file.write(f"{_bin_frame_idx},{ts_ms}\n")
+    _ts_file.flush()
+    _bin_frame_idx += 1
+
+
+def close_bin_file():
+    global _bin_file, _ts_file, _webcam_ts_file
+    if _bin_file:
+        _bin_file.close()
+        _bin_file = None
+    if _ts_file:
+        _ts_file.close()
+        _ts_file = None
+    if _webcam_ts_file:
+        _webcam_ts_file.close()
+        _webcam_ts_file = None
 
 
 def _ms_to_timestr(ms: int) -> str:
@@ -70,10 +139,6 @@ def radar_receive():
     sock.settimeout(0.5)
     print(f"[Radar] 수신 대기 중 0.0.0.0:{RADAR_PORT} → MATLAB port {_MATLAB_PORT}")
 
-    total_bytes = 0
-    count = 0
-    start = time.time()
-
     while not shutdown_event.is_set():
         try:
             data, _ = sock.recvfrom(65535)
@@ -91,13 +156,17 @@ def radar_receive():
         # 커스텀 헤더 제거 후 원본 DCA1000 패킷을 MATLAB으로 포워딩
         _matlab_sock.sendto(payload, ("127.0.0.1", _MATLAB_PORT))
 
-        count += 1
-        total_bytes += len(data)
-
-        if count % 500 == 0:
-            elapsed = time.time() - start
-            mbps = (total_bytes * 8) / elapsed / 1e6
-            print(f"[Radar] ── {count}개 패킷 | {total_bytes/1024:.1f} KB | {mbps:.2f} Mbps ──")
+        # DCA1000 헤더(10B) 제거 후 ADC 바이트 누적 → 프레임 단위 .bin 저장
+        if _SAVE_RADAR:
+            adc_bytes = payload[_DCA_HDR_SIZE:]
+            with _bin_lock:
+                global _current_ts_ms
+                _current_ts_ms = ts_ms
+                _adc_buf.extend(adc_bytes)
+                while len(_adc_buf) >= _BIN_FRAME_SIZE:
+                    frame = bytes(_adc_buf[:_BIN_FRAME_SIZE])
+                    del _adc_buf[:_BIN_FRAME_SIZE]
+                    _write_bin_frame(frame, _current_ts_ms)
 
     sock.close()
 
@@ -134,16 +203,89 @@ def webcam_receive():
             arr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if frame is not None:
+                # 수신한 JPEG 원본을 그대로 저장 (재인코딩 X)
+                if _SAVE_WEBCAM:
+                    with _webcam_lock:
+                        _write_webcam_frame(frame_data, ts)
+
                 global _latest_frame, _latest_frame_ts
                 with _latest_frame_lock:
                     _latest_frame    = frame
                     _latest_frame_ts = ts
                 if not frame_queue.full():
-                    frame_queue.put(frame)
-                cv2.imshow('Webcam Live', frame)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    shutdown_event.set()
-                    break
+                    frame_queue.put((frame, ts))
+                if _SHOW_LIVE:
+                    cv2.imshow('Webcam Live', frame)
+                    if cv2.waitKey(1) & 0xFF == ord('q'):
+                        shutdown_event.set()
+                        break
 
     sock.close()
     cv2.destroyAllWindows()
+
+
+def set_chirp(num_chirps: int, samples_per_chirp: int = 256, num_receivers: int = 4):
+    """chirp 수 변경에 맞춰 .bin 프레임 크기 갱신 (samples×rx×chirp×4byte)."""
+    global _BIN_FRAME_SIZE
+    _BIN_FRAME_SIZE = samples_per_chirp * num_receivers * num_chirps * 4
+    print(f"[Meta] chirp={num_chirps} → bin frame size={_BIN_FRAME_SIZE}B")
+
+
+def _write_mat(meta: dict):
+    """센더 메타로 iqData_RecordingParameters.mat 생성 (MATLAB dca1000FileReader 용)."""
+    import scipy.io as sio
+    _RADAR_DIR.mkdir(parents=True, exist_ok=True)
+    rp = {
+        "ADCSampleRate":   float(meta["ADCSampleRate"]),
+        "SweepSlope":      float(meta["SweepSlope"]),
+        "SamplesPerChirp": float(meta["SamplesPerChirp"]),
+        "CenterFrequency": float(meta["CenterFrequency"]),
+        "ChirpCycleTime":  float(meta["ChirpCycleTime"]),
+        "NumReceivers":    float(meta["NumReceivers"]),
+        "NumChirps":       float(meta["NumChirps"]),
+    }
+    path = _RADAR_DIR / "iqData_RecordingParameters.mat"
+    sio.savemat(str(path), {"RecordingParameters": rp})
+    print(f"[Meta] .mat 생성: {path.name}  NumChirps={rp['NumChirps']:.0f}")
+
+
+def meta_receive():
+    """센더가 보낸 레벨 메타(TCP)를 받아 .mat 생성 + .bin 프레임 크기 갱신."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(("0.0.0.0", META_PORT))
+    sock.listen(1)
+    sock.settimeout(0.5)
+    print(f"[Meta] 수신 대기 중 0.0.0.0:{META_PORT}")
+
+    while not shutdown_event.is_set():
+        try:
+            conn, _ = sock.accept()
+        except socket.timeout:
+            continue
+        with conn:
+            conn.settimeout(2.0)
+            buf = b""
+            try:
+                while True:
+                    chunk = conn.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+            except socket.timeout:
+                pass
+        if not buf:
+            continue
+        try:
+            meta = json.loads(buf.decode("utf-8"))
+        except (ValueError, UnicodeDecodeError) as e:
+            print(f"[Meta] 파싱 실패: {e}")
+            continue
+        set_chirp(int(meta["NumChirps"]),
+                  int(meta["SamplesPerChirp"]),
+                  int(meta["NumReceivers"]))
+        _write_mat(meta)
+
+    sock.close()
+
+

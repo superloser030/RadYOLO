@@ -20,6 +20,9 @@ archive/
 # 생성 데이터 (재생성 가능)
 data/scene/
 data/radar/
+data/objects/
+data/webcam/
+data/.session_*
 
 # 외부 도구 (별도 repo)
 tools/gigapose/

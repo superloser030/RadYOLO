@@ -1,0 +1,11 @@
+# ════════════════════════════════════════════════
+#  NETWORK  —  센더(노트북)·리시버(데스크톱) 공유
+#  IP/포트는 양쪽이 반드시 같은 값을 써야 하므로 이 파일 하나로 관리
+# ════════════════════════════════════════════════
+
+[network]
+desktop_ip   = "100.126.220.19"   # 데스크톱(수신) Tailscale IP  forlife→fordev
+radar_port   = 5006               # 레이더 UDP  (sender → receiver)
+webcam_port  = 5007               # 웹캠  UDP   (sender → receiver)
+meta_port    = 5008               # 레벨/메타 TCP (sender → receiver, .mat 생성용)
+matlab_port  = 5009               # 리시버 → 로컬 MATLAB 포워딩 (127.0.0.1)
