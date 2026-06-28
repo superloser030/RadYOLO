@@ -48,11 +48,12 @@ vfov_deg = 56.3
 
 # ─── DCA1000 (노트북 로컬) ───────────────────────
 [dca]
-data_ip        = "192.168.33.30"   # DCA → 노트북 UDP
-data_port      = 4098
-cli_port       = "COM3"            # 레이더 UART
-cli_baud       = 115200
-restart_at_seq = 70000             # 이 seq 도달 시 선제적 DCA 재시작
+data_ip   = "192.168.33.30"   # DCA → 노트북 UDP
+data_port = 4098
+cli_port  = "COM3"            # 레이더 UART
+cli_baud  = 115200
+# restart_at_seq 는 레벨(fps·chirp)에 따라 자동 계산 (resolve_level). DCA record
+# 가 ~76초 후 자동종료하므로 그 전에 선제 재시작할 패킷 수를 시간 기준으로 산출.
 
 # ─── RADAR 고정 파라미터 ─────────────────────────
 # .cfg / .mat 생성에 쓰이는 하드웨어 고정값.

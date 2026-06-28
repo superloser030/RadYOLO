@@ -31,7 +31,8 @@ DCA_DATA_IP    = _dca["data_ip"]
 DCA_DATA_PORT  = _dca["data_port"]
 CLI_PORT       = _dca["cli_port"]
 CLI_BAUD       = _dca["cli_baud"]
-RESTART_AT_SEQ = _dca["restart_at_seq"]
+RESTART_AT_SEQ = _dca.get("restart_at_seq", 70000)  # run()에서 레벨 기반으로 갱신
+_active_level  = None                                # run()에서 설정 (restart 시 재사용)
 
 VERBOSE = _sender["mode"].get("verbose", False)
 
@@ -125,16 +126,17 @@ def uart_send_commands(commands):
             print(f"  Send: {command:<30} | {_resp_status(resp)}")
 
 
-def send_radar_config(num_loops, frame_period_01ms):
+def send_radar_config(num_loops, frame_period_ms):
     """레벨에 맞춰 .cfg 의 frameCfg(numLoops, framePeriodicity)를 동적 수정 후 UART 전송.
 
     frameCfg <chirpStartIdx> <chirpEndIdx> <numLoops> <numFrames>
-             <framePeriodicity(0.1ms)> <triggerSelect> <frameTriggerDelay>
+             <framePeriodicity(ms)> <triggerSelect> <frameTriggerDelay>
+    framePeriodicity 단위는 ms (10fps=100ms).
     """
     import serial
     print(f"[UART] {CLI_PORT} 연결 중...")
     with serial.Serial(CLI_PORT, CLI_BAUD, timeout=0.3) as ser:
-        print(f"[UART] .cfg 전송 (numLoops={num_loops}, framePeriod={frame_period_01ms*0.1:.1f}ms)")
+        print(f"[UART] .cfg 전송 (numLoops={num_loops}, framePeriod={frame_period_ms}ms)")
         with open(RADAR_CFG, 'r') as f:
             lines = f.readlines()
         for line in lines:
@@ -143,8 +145,8 @@ def send_radar_config(num_loops, frame_period_01ms):
                 continue
             if command.startswith('frameCfg'):
                 parts = command.split()
-                parts[3] = str(num_loops)          # numLoops
-                parts[5] = str(frame_period_01ms)  # framePeriodicity (0.1ms 단위)
+                parts[3] = str(num_loops)        # numLoops
+                parts[5] = str(frame_period_ms)  # framePeriodicity (ms 단위)
                 command = ' '.join(parts)
             resp = _send_and_wait(ser, command)
             print(f"  Send: {command:<45} | {_resp_status(resp)}")
@@ -221,10 +223,11 @@ def restart_radar():
     except RuntimeError:
         pass
 
-    # 직전 .cfg 가 그대로 유지된 상태이므로 인자 없는 sensorStart 로 재시작
-    # ("sensorStart 0" 은 새 config 가 들어온 상태에서 펌웨어가 거부함)
-    print("[UART] sensorStop → sensorStart 전송 중...")
-    uart_send_commands(["sensorStop", "sensorStart"])
+    # 전체 .cfg 재전송 (.cfg 는 맨앞 sensorStop, 맨끝 sensorStart 포함).
+    # reconfig 없이 sensorStart/sensorStart 0 만 보내면 펌웨어 상태에 따라
+    # "no configuration" / "partial configuration" 등으로 거부되므로 전체 재설정.
+    print("[UART] 전체 reconfig 재전송 중...")
+    send_radar_config(_active_level["num_loops"], _active_level["frame_period_ms"])
 
     start_record_with_monitor()
     print("[Radar] 재시작 완료.")
@@ -409,9 +412,13 @@ def run(transmit_mode: int):
 
     transmit_mode: 0 = 웹캠만, 1 = 레이더 + 웹캠
     """
+    global _active_level, RESTART_AT_SEQ
     lv = select_level()
+    _active_level  = lv
+    RESTART_AT_SEQ = lv["restart_at_seq"]
     print(f"[Level] {lv['level']}: chirp={lv['chirp']} fps={lv['fps']} "
-          f"{lv['width']}x{lv['height']} q{lv['quality']}  (~{lv['est_mbps']}Mbps)")
+          f"{lv['width']}x{lv['height']} q{lv['quality']}  (~{lv['est_mbps']}Mbps)  "
+          f"restart@seq={RESTART_AT_SEQ}")
 
     threads = []
 
@@ -420,7 +427,7 @@ def run(transmit_mode: int):
         threads.append(threading.Thread(target=meta_sender_loop, args=(lv,), daemon=True))
         dca_cli("fpga")
         dca_cli("record")
-        send_radar_config(lv["num_loops"], lv["frame_period_01ms"])
+        send_radar_config(lv["num_loops"], lv["frame_period_ms"])
         start_record_with_monitor()
         threads.append(threading.Thread(target=radar_forward, daemon=True))
 

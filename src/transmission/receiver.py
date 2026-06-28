@@ -252,8 +252,15 @@ def _write_mat(meta: dict):
     print(f"[Meta] .mat 생성: {path.name}  NumChirps={rp['NumChirps']:.0f}")
 
 
+_last_meta = None   # 직전 수신 메타 — 동일하면 .mat 재생성/로그 스킵
+
+
 def meta_receive():
-    """센더가 보낸 레벨 메타(TCP)를 받아 .mat 생성 + .bin 프레임 크기 갱신."""
+    """센더가 보낸 레벨 메타(TCP)를 받아 .mat 생성 + .bin 프레임 크기 갱신.
+
+    센더는 메타를 주기적으로 재전송하므로, 값이 직전과 같으면 무시한다.
+    """
+    global _last_meta
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", META_PORT))
@@ -284,6 +291,9 @@ def meta_receive():
         except (ValueError, UnicodeDecodeError) as e:
             print(f"[Meta] 파싱 실패: {e}")
             continue
+        if meta == _last_meta:
+            continue   # 동일 메타 재전송 — 재생성/로그 스킵
+        _last_meta = meta
         set_chirp(int(meta["NumChirps"]),
                   int(meta["SamplesPerChirp"]),
                   int(meta["NumReceivers"]))

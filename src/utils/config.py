@@ -5,6 +5,7 @@ config/
   sender.toml    노트북: 카메라 캡처 + 레이더 + 레벨 테이블 + 모드
   receiver.toml  데스크톱: 파이프라인/저장 옵션
 """
+import math
 import tomllib
 from pathlib import Path
 
@@ -57,11 +58,21 @@ def export_camera_json(dest) -> dict:
     return view
 
 
+# DCA1000 UDP 패킷 payload 크기 (실측 ~1456B) + record 자동종료 전 안전 마진(초)
+_DCA_PAYLOAD = 1456
+_RECORD_SAFE_SECS = 70
+
+
 def resolve_level(sender_cfg: dict, level_idx: int) -> dict:
     """1-based 레벨 번호 → 레벨 dict.
 
-    chirp/fps 로부터 레이더 파생값(num_loops, frame_period_01ms, bin_frame_size)도
-    계산해 함께 반환한다. 센더(.cfg 생성)·리시버(.bin 프레임 크기) 양쪽이 공유.
+    chirp/fps 로부터 레이더 파생값을 계산해 함께 반환한다.
+    센더(.cfg 생성)·리시버(.bin 프레임 크기) 양쪽이 공유.
+      num_loops      : frameCfg numLoops (TDM 2TX → chirp/2)
+      frame_period_ms: frameCfg framePeriodicity. **ms 단위** (10fps=100ms)
+      bin_frame_size : samples×rx×chirp×4 (I+Q int16)
+      restart_at_seq : DCA record 가 ~76초 후 자동종료하므로, 그 전에 선제
+                       재시작할 패킷 수. fps·chirp 에 비례 (시간 기준).
     """
     levels = sender_cfg["level"]
     if not (1 <= level_idx <= len(levels)):
@@ -69,10 +80,12 @@ def resolve_level(sender_cfg: dict, level_idx: int) -> dict:
     lv    = dict(levels[level_idx - 1])
     radar = sender_cfg["radar"]
 
-    lv["num_loops"]         = lv["chirp"] // 2          # TDM 2TX
-    lv["frame_period_01ms"] = round(10000 / lv["fps"])  # frameCfg 5번째 인자
-    lv["bin_frame_size"]    = (radar["samples_per_chirp"]
-                               * radar["num_receivers"]
-                               * lv["chirp"] * 4)        # 4 bytes/sample (I+Q int16)
+    lv["num_loops"]       = lv["chirp"] // 2          # TDM 2TX
+    lv["frame_period_ms"] = round(1000 / lv["fps"])   # ms 단위 (frameCfg 5번째)
+    lv["bin_frame_size"]  = (radar["samples_per_chirp"]
+                             * radar["num_receivers"]
+                             * lv["chirp"] * 4)
+    frame_pkts = math.ceil(lv["bin_frame_size"] / _DCA_PAYLOAD)
+    lv["restart_at_seq"] = int(lv["fps"] * frame_pkts * _RECORD_SAFE_SECS)
     lv["level"] = level_idx
     return lv

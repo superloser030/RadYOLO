@@ -197,6 +197,9 @@ def _start_iperf_server():
 
 
 def _start_viewer(port=8000):
+    # sender.toml 의 intrinsic 을 viewer 가 fetch 할 JSON 으로 export
+    # (archive_data 가 data/ 를 비운 뒤여야 하므로 viewer 시작 시점에 생성)
+    export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")
     os.chdir(PROJECT_ROOT)
     server = http.server.HTTPServer(
         ("localhost", port),
@@ -221,7 +224,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     cam_cfg = load_camera()
-    export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")  # viewer 용
     _http_server = None
     _iperf_proc  = None
 
@@ -239,6 +241,15 @@ if __name__ == "__main__":
         t_meta.start()
         t_radar.start()
         t_webcam.start()
+
+        # 레이더 메타(.mat/chirp) 확정 후 안정화되면 배경 캡처 시작
+        import time as _time
+        print("[Init] 레이더 메타 수신 대기...")
+        if receiver._chirp_ready.wait(timeout=20):
+            print("[Init] 메타 확정 — 2초 후 시작")
+            _time.sleep(2)
+        else:
+            print("[Init] 메타 타임아웃(20s) — 웹캠만으로 진행")
 
         if not args.skip_bg:
             print("=== Step 1: 배경 프레임 선택 (10초) ===")
