@@ -146,6 +146,7 @@ def live_update_loop(cam_cfg):
             continue
 
         fusion_lines = []
+        overlay = []          # 2D 뷰어용: 객체별 bbox + 거리
         for obj_dir in sorted(objects_dir.iterdir()):
             if not obj_dir.is_dir():
                 continue
@@ -181,6 +182,13 @@ def live_update_loop(cam_cfg):
                 else:
                     fusion_lines.append(f"[Fusion] {obj_dir.name:12} miss")
                 (obj_dir / "live.json").write_text(json.dumps(best))
+                overlay.append({
+                    "name":    obj_dir.name,
+                    "cls":     cls,
+                    "bbox":    [round(v) for v in best["bbox"]],
+                    "range_m": best.get("range_m"),
+                    "az":      best.get("azimuth_deg"),
+                })
 
                 # 이전 추론이 끝난 즉시 다음 추론 시작
                 key = obj_dir.name
@@ -197,6 +205,9 @@ def live_update_loop(cam_cfg):
                             inferring[k] = False
 
                     threading.Thread(target=_launch, daemon=True).start()
+
+        # 2D 뷰어 오버레이 (매 루프 갱신)
+        (PROJECT_ROOT / "data" / "scene" / "live_overlay.json").write_text(json.dumps(overlay))
 
         now = time.time()
         if now - _last_fusion >= 1.0:
@@ -246,19 +257,54 @@ def _start_matlab_cfar():
         return None
 
 
+class _ViewerHandler(http.server.SimpleHTTPRequestHandler):
+    """정적 파일 + /stream (실시간 웹캠 MJPEG)."""
+    def do_GET(self):
+        if self.path == "/stream":
+            self._mjpeg()
+        else:
+            super().do_GET()
+
+    def _mjpeg(self):
+        import time as _t, cv2 as _cv
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+        except Exception:
+            return
+        while not receiver.shutdown_event.is_set():
+            frame = receiver.get_latest_frame()
+            if frame is None:
+                _t.sleep(0.05); continue
+            ok, buf = _cv.imencode(".jpg", frame, [_cv.IMWRITE_JPEG_QUALITY, 70])
+            if not ok:
+                continue
+            try:
+                self.wfile.write(b"--frame\r\nContent-Type: image/jpeg\r\n\r\n")
+                self.wfile.write(buf.tobytes())
+                self.wfile.write(b"\r\n")
+            except (BrokenPipeError, ConnectionResetError):
+                break
+            _t.sleep(0.1)   # ~10fps
+
+    def log_message(self, *args):   # 폴링/스트림 로그 도배 방지
+        pass
+
+
 def _start_viewer(port=8000):
     # sender.toml 의 intrinsic 을 viewer 가 fetch 할 JSON 으로 export
     # (archive_data 가 data/ 를 비운 뒤여야 하므로 viewer 시작 시점에 생성)
     export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")
     os.chdir(PROJECT_ROOT)
-    server = http.server.HTTPServer(
-        ("localhost", port),
-        http.server.SimpleHTTPRequestHandler
-    )
-    url = f"http://localhost:{port}/src/viewer/viewer.html"
-    threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    server = http.server.ThreadingHTTPServer(("localhost", port), _ViewerHandler)
+    url2d = f"http://localhost:{port}/src/viewer/viewer2d.html"
+    url3d = f"http://localhost:{port}/src/viewer/viewer.html"
+    threading.Timer(0.5, lambda: webbrowser.open(url2d)).start()
     print(f"\n=== 뷰어 시작 ===")
-    print(f"[Server] {url}  (Ctrl+C로 종료)")
+    print(f"[Server] 2D: {url2d}")
+    print(f"[Server] 3D: {url3d}   (Ctrl+C로 종료)")
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 

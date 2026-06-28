@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>RadYOLO 2D</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; overflow: hidden; font: 14px monospace; color: #ccc; }
+    #wrap { position: relative; display: inline-block; }
+    #cam  { display: block; max-width: 100vw; max-height: 100vh; }
+    #ov   { position: absolute; top: 0; left: 0; pointer-events: none; }
+    #info { position: fixed; top: 8px; left: 8px; color: #888;
+            background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <img id="cam" src="/stream" alt="webcam">
+  <canvas id="ov"></canvas>
+</div>
+<div id="info">RadYOLO 2D — 웹캠 + 레이더 거리</div>
+
+<script>
+const W_REF = 1920, H_REF = 1080;   // live_overlay.json bbox 기준 해상도
+const cam = document.getElementById('cam');
+const ov  = document.getElementById('ov');
+const ctx = ov.getContext('2d');
+
+const COLORS = {
+  person: '#ff5454', chair: '#54ff54', laptop: '#54a0ff',
+  bottle: '#ffd054', keyboard: '#ff54ff', tv: '#54ffff', mouse: '#ffa054',
+};
+
+function resize() {
+  ov.width  = cam.clientWidth  || cam.naturalWidth  || 854;
+  ov.height = cam.clientHeight || cam.naturalHeight || 480;
+}
+cam.addEventListener('load', resize);
+window.addEventListener('resize', resize);
+
+async function poll() {
+  try {
+    const data = await fetch('/data/scene/live_overlay.json?_=' + Date.now())
+                       .then(r => r.ok ? r.json() : []);
+    const sx = ov.width / W_REF, sy = ov.height / H_REF;
+    ctx.clearRect(0, 0, ov.width, ov.height);
+
+    for (const o of data) {
+      const [x1, y1, x2, y2] = o.bbox;
+      const c = COLORS[o.cls] || '#ffffff';
+      const X = x1 * sx, Y = y1 * sy, Wd = (x2 - x1) * sx, Hd = (y2 - y1) * sy;
+
+      ctx.lineWidth = 2; ctx.strokeStyle = c;
+      ctx.strokeRect(X, Y, Wd, Hd);
+
+      let label = o.name;
+      if (o.range_m != null) label += '  ' + o.range_m.toFixed(2) + 'm';
+      else                   label += '  (no radar)';
+      if (o.az != null)      label += '  az' + (o.az >= 0 ? '+' : '') + o.az.toFixed(0);
+
+      ctx.font = '15px monospace';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = c;
+      ctx.fillRect(X, Y - 19, tw + 8, 19);
+      ctx.fillStyle = '#000';
+      ctx.fillText(label, X + 4, Y - 5);
+    }
+  } catch (e) {}
+  setTimeout(poll, 150);
+}
+
+resize();
+poll();
+</script>
+</body>
+</html>
