@@ -12,6 +12,8 @@ import cv2
 import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+OBJECTS_DIR  = PROJECT_ROOT / "data" / "objects"
+DB_DIR       = PROJECT_ROOT / "db"   # 세션 간 영구 오브젝트 DB (archive 대상 아님)
 
 from src.utils.archive import (
     archive_data,
@@ -164,6 +166,68 @@ def _update_manifest():
             "has_pose":  (obj_dir / "pose.json").exists(),
         })
     (OBJECTS_DIR / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+
+def _save_to_db(od: Path, cls_name: str, appearance):
+    """GLB 완성 오브젝트를 영구 DB에 저장. 세션 간 재사용을 위해."""
+    import uuid
+    if appearance is None or not (od / "model_trellis.glb").exists():
+        return
+    DB_DIR.mkdir(exist_ok=True)
+    db_entry = DB_DIR / f"{cls_name}_{uuid.uuid4().hex[:8]}"
+    db_entry.mkdir(exist_ok=True)
+    shutil.copy2(str(od / "model_trellis.glb"), str(db_entry / "model_trellis.glb"))
+    tmpl_src = od / "templates"
+    if tmpl_src.exists():
+        tmpl_dst = db_entry / "templates"
+        if tmpl_dst.exists():
+            shutil.rmtree(str(tmpl_dst))
+        shutil.copytree(str(tmpl_src), str(tmpl_dst))
+    np.save(str(db_entry / "appearance.npy"), appearance)
+    (db_entry / "meta.json").write_text(json.dumps(
+        {"class": cls_name, "saved_at": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2))
+    print(f"[DB] 저장: {db_entry.name}")
+
+
+def _try_db_match(cls: str, appearance, threshold=0.65):
+    """DB에서 같은 클래스 + HSV 유사도 ≥ threshold 인 항목 검색 → Path or None."""
+    if appearance is None or not DB_DIR.exists():
+        return None
+    best_path, best_score = None, -1.0
+    for entry in DB_DIR.iterdir():
+        if not entry.is_dir():
+            continue
+        meta_p = entry / "meta.json"
+        app_p  = entry / "appearance.npy"
+        if not meta_p.exists() or not app_p.exists():
+            continue
+        try:
+            if json.loads(meta_p.read_text()).get("class") != cls:
+                continue
+            db_app = np.load(str(app_p))
+            score  = float(cv2.compareHist(appearance, db_app, cv2.HISTCMP_CORREL))
+        except Exception:
+            continue
+        if score > best_score:
+            best_score, best_path = score, entry
+    if best_score >= threshold:
+        print(f"[DB] 매칭: {cls} ← {best_path.name} (score={best_score:.3f})")
+        return best_path
+    return None
+
+
+def _restore_from_db(db_entry: Path, cls_name: str, tid: int) -> Path:
+    """DB 항목을 data/objects/<cls>_<tid>/ 로 복사 후 경로 반환."""
+    od = OBJECTS_DIR / f"{cls_name}_{tid}"
+    od.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(str(db_entry / "model_trellis.glb"), str(od / "model_trellis.glb"))
+    tmpl_src = db_entry / "templates"
+    if tmpl_src.exists():
+        tmpl_dst = od / "templates"
+        if tmpl_dst.exists():
+            shutil.rmtree(str(tmpl_dst))
+        shutil.copytree(str(tmpl_src), str(tmpl_dst))
+    return od
 
 
 def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
@@ -384,9 +448,19 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 else:
                     tid = _next_tid[0]; _next_tid[0] += 1
                     d["tid"] = tid; matched.add(tid)
-                    registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
-                                     "miss": 0, "state": "NEW", "last_range": None, "glb": None,
-                                     "appearance": d["appearance"]}
+                    db_match = _try_db_match(d["name"], d["appearance"])
+                    if db_match:
+                        od = _restore_from_db(db_match, d["name"], tid)
+                        registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
+                                         "miss": 0, "state": "READY", "last_range": None,
+                                         "glb": str(od / "model_trellis.glb"),
+                                         "appearance": d["appearance"]}
+                        _update_manifest()
+                        print(f"[DB-ReID] {d['name']}_{tid} DB 복원 → READY 즉시 진입")
+                    else:
+                        registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
+                                         "miss": 0, "state": "NEW", "last_range": None, "glb": None,
+                                         "appearance": d["appearance"]}
 
         # 미매칭 registry: miss++ → graveyard 이동 (re-ID 대기)
         for tid in list(registry):
@@ -486,6 +560,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                                 registry[tid]["state"] = "READY"
                                 registry[tid]["glb"]   = str(od / "model_trellis.glb")
                                 _update_manifest()
+                                _save_to_db(od, cls_name, registry[tid].get("appearance"))
                             print(f"[State] {cls_name}_{tid} → READY "
                                   f"({'멀티뷰 ' + str(1+len(extra_cutouts)) + '장' if extra_cutouts else '단일뷰'})")
                         except Exception as e:
