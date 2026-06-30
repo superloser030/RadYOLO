@@ -1,0 +1,69 @@
+\begin{statusdone}\end{statusdone}
+
+\chapter{원리 및 설계 근거}
+
+\section{단안 깊이의 스케일 모호성}
+일반 단안 깊이 모델은 \emph{상대} 깊이(가깝다/멀다)는 잘 맞히지만 절대 미터는
+모른다. 초기에는 레이더 거리로 깊이맵을 미터로 보정하는 회귀(log-linear 계수)를
+썼으나, 장면 변화에 민감하고 보정 단계가 번거로웠다.
+
+\begin{designbox}{DepthAnythingV3 metric(Raw) 모드 채택}
+\texttt{da3metric\_large} 모델을 \texttt{normalization\_mode = "Raw"}로 실행하면
+모델이 \emph{미터 단위} 깊이를 직접 출력한다. 절대 스케일이 실제의 약 1/2.5로
+과소추정되지만 \emph{순서(상대 관계)는 일관}되므로, 객체별 비율(ratio)만 곱하면
+실제 거리로 환산된다(Part V). 별도 보정 단계(회귀)를 우회할 수 있어 채택했다.
+\end{designbox}
+
+\section{객체 거리 = 마스크 안쪽 깊이의 중앙값}
+객체까지 거리는 ``그 객체 마스크 영역의 깊이 중앙값''으로 정의한다. 단,
+마스크 경계는 배경/인접 객체가 섞이기 쉬우므로 \textbf{마스크를 안쪽으로 깎은}
+핵심부만 사용한다.
+
+\chapter{구현 및 디렉토리 구조}
+
+\section{\texttt{src/background/depth.py} — \texttt{generate\_depth}}
+ComfyUI 워크플로(\texttt{workflows\_comfyui/da3\_depth.json})를 호출해 깊이를 만든다.
+모드를 셋으로 분리한다.
+\begin{center}
+\begin{tabular}{@{}llp{6.5cm}@{}}
+\toprule
+모드 & 산출물 & 용도 \\
+\midrule
+\texttt{live} & \texttt{depth\_metric.npy} & 현재 프레임 미터맵(객체 거리 \texttt{\_mask\_dist}) \\
+\texttt{bg}   & \texttt{depth\_bg.png}+\texttt{calib} & 뷰어 배경 포인트클라우드 \\
+\texttt{both} & 위 둘 다 & 초기 배경 프레임(객체 포함) \\
+\bottomrule
+\end{tabular}
+\end{center}
+ComfyUI 커스텀 노드에 metric 원시값 \texttt{.npy} 덤프를 추가하여(저장소 외부),
+정규화 손실 없이 미터맵을 받는다.
+
+\section{마스크 안쪽 깊이 샘플링 — \texttt{\_mask\_dist}}
+\texttt{ERODE\_FRAC=0.50}: 마스크 짧은 변의 50\%만큼 안쪽으로 깎고, 그 영역의
+metric npy 중앙값을 거리로 쓴다. 침식은 \texttt{distanceTransform} 기반(아래 문제해결
+참조).
+
+\section{객체별 첫 깊이 고정 — \texttt{da3\_0}}
+객체가 처음 잡힐 때의 깊이를 \texttt{da3\_0}에 고정하고, 7초마다 DA3를 재추론할
+때만 갱신한다. 매 프레임 흔들리는 깊이 대신 안정된 기준값을 유지하기 위함이다.
+재추론은 ComfyUI 부하를 고려해 7초 주기, 라이브 재추론에서는 ESRGAN을 생략한다.
+
+\chapter{문제 해결 과정}
+
+\section{큰 커널 침식 병목 → distanceTransform}
+\textbf{증상}: \texttt{ERODE\_FRAC}를 0.5로 키우자 라이브 루프(bbox/레이더 갱신)가
+전체적으로 느려졌다.\\
+\textbf{원인}: 침식 커널이 마스크 크기에 비례한다. 큰 의자(짧은 변 $\sim$500\,px)면
+$501\times501$ 타원 커널로 \texttt{cv2.erode}를 매 객체/매 프레임 실행해 비용이 폭증.\\
+\textbf{해결}: \texttt{cv2.distanceTransform}으로 ``경계에서 $N$\,px 이상 안쪽''을
+$O(N)$ 한 번에 계산. 커널 크기와 무관하게 빠르며 결과는 동일.
+
+\section{배경/라이브 깊이 충돌}
+\textbf{증상}: 동적 배경 갱신 시 3D 뷰어/객체 거리가 깨짐.\\
+\textbf{원인}: 배경 깊이와 현재 프레임 깊이가 같은 파일을 공유.\\
+\textbf{해결}: \texttt{live}/\texttt{bg} 모드를 파일 단위로 분리(위 표).
+
+\section{metric 깊이의 뷰어 표시}
+metric(Raw) 출력은 8비트 PNG로 그대로 저장하면 클램핑되어 시각화가 깨진다.
+\texttt{\_write\_metric\_vis}로 near=bright 정규화 + \texttt{metric\_linear} 역산
+계수를 저장해, 뷰어가 다시 미터로 복원하도록 했다.

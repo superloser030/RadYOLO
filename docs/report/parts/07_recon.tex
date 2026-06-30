@@ -1,0 +1,80 @@
+\begin{statuswip}[ — TRELLIS 메시 생성은 동작, GigaPose 포즈는 미완성]\end{statuswip}
+
+\chapter{원리 및 설계 근거}
+
+\section{단일 이미지 → 3D 메시}
+객체 cutout(흰 배경 위 객체)을 TRELLIS(fal-ai API)에 보내 GLB 메시를 생성한다.
+한 장만으로도 생성되지만, 여러 시점을 주면(멀티뷰) 가려진 면이 보완되어 형상이
+좋아진다. 따라서 \emph{모델링 전에 여러 시점을 수집}하는 단계를 둔다.
+
+\section{객체 상태 머신}
+각 객체(registry의 tid)는 다음 상태를 거친다.
+\begin{center}
+\begin{tabular}{@{}lp{9cm}@{}}
+\toprule
+상태 & 의미/전이 조건 \\
+\midrule
+\texttt{NEW}        & 등록됨. \texttt{conf}$\ge$\texttt{model\_conf}이고 비-스킵
+                      클래스면 \texttt{COLLECTING}으로. \\
+\texttt{COLLECTING} & 여러 시점 프레임 수집. \texttt{MIN\_VIEWS=3} 모이거나
+                      \texttt{COLLECT\_TIMEOUT=30}초 경과 시 \texttt{MODELING}. \\
+\texttt{MODELING}   & SAM2 cutout 생성 → TRELLIS 3D 생성. 완료 시 \texttt{READY}. \\
+\texttt{READY}      & GLB 보유. GigaPose 포즈 추정 수행(미완성). \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{designbox}{시점 다양화 — \texttt{MOVE\_TH}로 중복 프레임 배제}
+가만히 있는 객체를 매 프레임 저장하면 같은 시점만 쌓여 멀티뷰 효과가 없다.
+직전 수집 시점에서 객체 중심이 \emph{bbox 폭의 \texttt{MOVE\_TH}(=0.30)배 이상}
+이동했을 때만 새 view로 저장한다. 즉 ``충분히 다른 각도''만 모은다. 30초 안에
+한 장도 못 모으면 강제로 한 장을 저장해 단일뷰로라도 진행한다.
+\end{designbox}
+
+\chapter{구현 및 디렉토리 구조}
+
+\section{수집 → 모델링 — \texttt{main\_r.py} 상태 머신}
+\texttt{COLLECTING}에서 \texttt{view\_*.jpg}와 시점 메타(중심/bbox)를 모으고,
+조건 충족 시 백그라운드 스레드 \texttt{\_model\_bg}로 모델링을 비동기 실행한다
+(라이브 루프를 막지 않음).
+
+\section{정밀 분할 — \texttt{src/objects/obj\_crop.py}}
+SAM2(hiera-large)로 bbox를 정밀 마스크로 다듬고, 마스크 밖을 흰색으로 채운
+cutout을 만든다. 첫 시점은 \texttt{crop\_one}, 추가 시점은 \texttt{crop\_one\_extra}로
+처리한다. \texttt{person} 클래스는 3D 대상에서 제외(\texttt{SKIP\_CLASSES}).
+
+\section{3D 생성 — \texttt{src/objects/trellis\_gen.py}}
+\texttt{fal-ai/trellis}(단일) 또는 \texttt{fal-ai/trellis/multi}(멀티뷰)에 cutout을
+업로드해 GLB를 받아 \texttt{model\_trellis.glb}로 저장. 주요 파라미터:
+\texttt{ss\_sampling\_steps=12}, \texttt{slat\_sampling\_steps=12},
+\texttt{mesh\_simplify=0.95}, \texttt{texture\_size=1024}.
+
+\section{포즈 추정 — \texttt{src/objects/pose\_estimator.py}}
+GigaPose를 \emph{별도 conda 환경}에서 \texttt{inference\_server.py}를 subprocess로
+띄워 stdin/stdout JSON으로 통신한다(모델 1회 로드). \texttt{prepare\_templates}로
+GLB에서 162개 시점 템플릿을 렌더하고, 라이브 프레임+bbox+카메라 K를 보내
+$R, t, \text{score}$를 받는다.
+
+\chapter{현재 한계와 미완성 분석}
+
+\begin{statustodo}[ — GigaPose 포즈]\end{statustodo}
+
+\section{증상}
+GigaPose가 반환하는 포즈 \texttt{score}가 라이브에서 $0.0\sim0.2$에 머문다(예:
+\texttt{chair} 0.17$\sim$0.20, \texttt{tv} 0.0). 이 점수대는 템플릿-관측 매칭이
+거의 실패한 수준이라, 회전($R$)을 신뢰할 수 없다.
+
+\section{원인 후보(미해결)}
+\begin{itemize}
+  \item \textbf{메시 품질}: 단일/2뷰 TRELLIS GLB는 형상이 부실해 162 템플릿과
+        실제 관측이 잘 안 맞는다.
+  \item \textbf{입력 정합}: 라이브 crop/bbox·카메라 내부 파라미터가 템플릿 렌더
+        조건과 어긋날 가능성.
+  \item \textbf{조명/외형 차이}: 렌더 템플릿과 실제 조명·텍스처 불일치.
+\end{itemize}
+
+\section{현 시점 처리}
+포즈 \texttt{score}가 임계 미만이면 회전 갱신을 무시(직전 회전 유지)하도록
+게이트를 두었다. 결과적으로 자세는 정면 고정에 가깝고, 본 보고서에서는 포즈
+추정을 \emph{미완성}으로 명시한다. 위치/거리 배치는 포즈와 독립적으로 동작한다
+(Part VIII).

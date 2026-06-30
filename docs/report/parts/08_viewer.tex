@@ -1,0 +1,79 @@
+\begin{statustodo}[ — 배경 렌더는 동작, 객체 배치 정합 진행 중]\end{statustodo}
+
+\chapter{원리 및 설계 근거}
+
+\section{배경 포인트클라우드}
+배경 깊이맵(\texttt{depth\_bg.png}) 각 픽셀을 카메라 좌표로 역투영해 3D 점으로
+렌더한다. 깊이 정규화값 $d$를 미터로 되돌리는 \texttt{depthToCam}(metric\_linear:
+$\text{range\_min} + (1-d)(\text{range\_max}-\text{range\_min})$) 후,
+\[
+  X = \frac{p_x-c_x}{f_x}\,d_c,\quad
+  Y = -\frac{p_y-c_y}{f_y}\,d_c,\quad Z = -d_c.
+\]
+이 부분은 안정적으로 동작한다.
+
+\section{객체 배치와 거리 표시 모드}
+객체 GLB는 \texttt{live\_overlay.json}의 bbox 중심과 깊이로 배치한다. 2D 뷰어는
+거리 표시 모드를 콘솔 명령으로 전환한다.
+\begin{center}
+\begin{tabular}{@{}lp{8cm}@{}}
+\toprule
+\texttt{dist} 모드 & 표시 \\
+\midrule
+\texttt{live}  & 최종(융합) 거리만 \\
+\texttt{debug} & R(순수 레이더, 없으면 no radar) + D(DA3 깊이) \\
+\texttt{full}  & 최종 + R + D + az/v/n/snr \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\chapter{구현 및 디렉토리 구조}
+
+\section{\texttt{src/viewer/viewer.html} (Three.js)}
+\begin{itemize}
+  \item \texttt{build3D} / \texttt{\_buildPointsGeo}: 배경 깊이 → 포인트클라우드.
+  \item \texttt{posFromOverlay}: 객체 bbox 중심 + 깊이로 3D 위치, bbox 높이$\times$깊이로
+        크기 추정.
+  \item \texttt{pollPos}(위치) / \texttt{pollRot}(회전, score 게이트) 분리 폴링.
+  \item 콘솔 명령 레지스트리(\texttt{2d/3d/dist/set/get}).
+\end{itemize}
+
+\begin{figure}[H]
+  \centering
+  % figures/viewer_3d.png 에 3D 뷰어 스크린샷을 넣으세요
+  \includegraphics[width=0.9\textwidth]{viewer_3d.png}
+  \caption{3D 뷰어 — 배경 깊이맵을 역투영한 포인트클라우드 위에 객체 메시를
+  배치한다. 배경 렌더와 객체의 위치/크기 배치는 동작하나, 자세 정합 등 일부는
+  진행 중이다(미완성).}
+  \label{fig:viewer3d}
+\end{figure}
+
+\chapter{현재 한계와 미완성 분석}
+
+\section{객체 배치 좌표계 정합 (진행 중)}
+\textbf{문제의 핵심}: 배경 포인트클라우드는 \emph{DA3 raw metric}(과소 스케일)으로
+배치되는데, 객체를 \emph{레이더 보정 실제 미터}(\texttt{range\_m})로 배치하면 두
+좌표계 스케일이 달라 객체가 배경을 뚫고 어긋났다.
+
+\textbf{디버깅 경과}(시간순):
+\begin{enumerate}
+  \item 객체가 공중에 ``둥둥'' 뜸 → 부정확한 포즈 $t$를 배경 깊이에 투영해
+        배치하던 것이 원인. 그리고 위치 갱신용 \texttt{live.json}이 실제로는
+        생성되지 않아 위치가 초기값에 고정되어 있었다.
+  \item 위치를 \texttt{range\_m}로 직접 배치 + 포즈 score 게이트 도입.
+  \item 가까운 객체가 화면을 채우는 거대 평면이 됨 → \texttt{scale=1/range}가
+        가까운 객체를 거대화. 크기를 bbox$\times$깊이의 실제 크기로 교체.
+  \item 배경(raw metric)과 객체(실제 미터) \emph{스케일 불일치} 확인 → 배치 깊이를
+        \texttt{da3\_m}(배경과 동일 raw metric)으로 변경해 동일 좌표계로 맞춤.
+\end{enumerate}
+
+\section{남은 미완성 항목}
+\begin{itemize}
+  \item \textbf{자세}: GigaPose 포즈 미완성(Part VII)으로 객체 회전이 정면 고정.
+  \item \textbf{내부 파라미터 정합}: overlay bbox 좌표계와 배경 빌드의 $f_x,c_x$가
+        다를 경우 좌우 어긋남 가능 — 검증 필요.
+  \item \textbf{깊이 지연}: 배치 깊이를 \texttt{da3\_0}(7초 고정)으로 쓰면 객체를
+        옮길 때 깊이가 늦게 따라온다. 실시간 마스크 깊이 사용은 향후 과제.
+\end{itemize}
+종합하면 \textbf{배경 렌더와 객체의 위치/크기 배치는 동작하나, 자세 정합과 일부
+좌표계 정합이 남아 3D 뷰어는 미완성}이다.

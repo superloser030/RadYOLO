@@ -1,0 +1,85 @@
+\chapter{전체 디렉토리 트리}
+\begin{lstlisting}[language=]
+RadYOLO/
+  main_r.py                 # 수신측 메인: 상태머신 + 융합 + 뷰어 서버
+  src/
+    transmission/
+      sender.py             # 송신: 레벨선택, DCA CLI, 레이더/웹캠 전송
+      receiver.py           # 수신: 청크 재조립, MATLAB 포워드, 메타 게이트
+    objects/
+      radar_fusion.py       # 투영/매칭/집계 (radar_to_x, match_all)
+      obj_crop.py           # SAM2 정밀 분할 + cutout
+      trellis_gen.py        # TRELLIS(fal-ai) 3D 생성
+      pose_estimator.py     # GigaPose subprocess 통신 (미완성)
+    background/
+      depth.py              # DA3 metric 깊이 (live/bg/both)
+      dynamic_bg_fill.py    # 동적 배경 채우기
+      upscale.py            # Real-ESRGAN 업스케일
+      bg_select.py          # 배경 프레임 선정(선명도+SNR)
+      depth_calibration.py  # (legacy) log-linear 깊이 보정
+    utils/
+      config.py             # TOML 로더 + 레벨 해석
+      gpu_scheduler.py      # 우선순위 GPU 작업 큐 / VRAM 관리
+      radar_cam_calib.py    # 외부 캘리브(yaw) 추정 루프
+      archive.py            # 이전 data/ 아카이브
+    viewer/
+      viewer.html           # Three.js 2D/3D 통합 뷰어 + 콘솔
+  matlab/
+    radar_live.m            # 실시간 폴링 + CFAR 파이프라인
+    modules/                # rangeDopplerMap, cfarDetect, estimateAzimuth ...
+  workflows_comfyui/        # da3_depth.json (DA3), ESRGAN 워크플로
+  config/
+    network.toml            # IP/포트
+    sender.toml             # 레벨/카메라/DCA/레이더 파라미터
+    receiver.toml           # 저장/파이프라인/YOLO/DynBG
+  tools/
+    dca1000/                # TI DCA1000 캡처 CLI + chirp_configs
+    gigapose/               # GigaPose (외부 repo, gitignore)
+  data/                     # 생성물 (gitignore)
+    scene/                  # background, depth_metric, depth_bg, live_overlay
+    objects/                # 객체별 views/cutout/glb/templates/pose
+    radar/                  # targets.json, iqData_*.bin, .mat
+    webcam/                 # 수신 프레임
+  db/                       # 객체 모델 DB (재식별용, gitignore)
+\end{lstlisting}
+
+\chapter{실행 모드와 CLI 플래그}
+\begin{center}
+\begin{tabular}{@{}lp{8.5cm}@{}}
+\toprule
+플래그 & 의미 \\
+\midrule
+(없음)          & 전체 파이프라인: 배경촬영→ESRGAN→DA3→마스크→라이브 \\
+\texttt{--calib} & 외부 캘리브(yaw) 모드(경량). 배경/3D 미생성 \\
+\texttt{--verify}& 경량 수신 검증 모드 \\
+\texttt{--skip-calib} & 레이더 기반 깊이 보정(Step 3.5) 생략(metric 모드에선 무의미) \\
+\texttt{--skip-depth} & DA3 추론 생략(이전 depth 재사용) \\
+\texttt{--no-radar}   & 레이더 없이 웹캠만(메타 대기 생략) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\chapter{주요 파라미터 레퍼런스}
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+파라미터 & 값 & 위치/의미 \\
+\midrule
+\texttt{CHUNK\_SIZE}   & 1100\,B & 웹캠 UDP 청크 \\
+\texttt{Pfa}           & $10^{-4}$ & CFAR 허위경보율 \\
+\texttt{rGate}         & $0.3\sim6.0$\,m & 레이더 거리 게이트 \\
+\texttt{topN}          & 50 & 프레임당 최대 검출 \\
+\texttt{SNR\_MIN}      & 4.0 & 레이더 신뢰 게이트 \\
+\texttt{ERODE\_FRAC}   & 0.50 & 깊이 샘플 마스크 침식 비율 \\
+\texttt{ratio EMA}     & $0.7/0.3$ & 스케일 비율 평활 \\
+\texttt{RATIO\_TRUST\_N} & 5 & 자기 스케일 신뢰 최소 학습 횟수 \\
+\texttt{RATIO\_OUTLIER}  & 2.0 & 스케일 이상치 거부 배수 \\
+\texttt{v-EMA }$\alpha$ & 0.15/0.50 & 정지/동적 거리 평활 \\
+\texttt{MOVE\_TH}      & 0.30 & 멀티뷰 시점 다양화 임계(bbox 폭 비) \\
+\texttt{MIN\_VIEWS}    & 3 & 모델링 진입 최소 시점 수 \\
+\texttt{COLLECT\_TIMEOUT} & 30\,s & 시점 수집 타임아웃 \\
+\texttt{REVEAL\_MIN}   & 15 & DynBG 배경 인정 연속 빈 프레임 \\
+\texttt{DA3 재추론}    & 7\,s & 라이브 깊이 재추론 주기 \\
+\bottomrule
+\end{tabular}
+\end{center}

@@ -1,0 +1,95 @@
+\begin{statusdone}\end{statusdone}
+
+\chapter{원리 및 설계 근거}
+
+\section{FMCW 레이더와 3차원 정보}
+AWR1642는 FMCW(주파수 변조 연속파) 레이더로, 송신 chirp와 수신 신호의 비트
+주파수에서 거리를, chirp 간 위상 변화에서 속도(도플러)를, 수신 안테나 간 위상
+차에서 방위각을 얻는다. 본 시스템은 \textbf{2 TX $\times$ 4 RX}를 가상 배열(virtual
+array, 8소자 ULA)로 합성하여 각도 분해능을 높인다.
+\begin{itemize}
+  \item \textbf{Range}: ADC 샘플에 대한 Range FFT.
+  \item \textbf{Velocity}: chirp 축 Doppler FFT (\texttt{DopplerOutput='Speed'}).
+  \item \textbf{Azimuth}: 가상 배열에 대한 Beamscan DOA 추정($-60^\circ\sim60^\circ$).
+\end{itemize}
+
+\section{CA-CFAR 검출}
+잡음 환경에서 표적을 검출하기 위해 2D CA-CFAR(Cell-Averaging Constant False Alarm
+Rate)를 사용한다. 각 시험 셀 주변의 training band 평균 잡음에 비례해 임계값을
+정하므로, 배경 잡음 수준이 달라도 \emph{허위경보율(Pfa)}을 일정하게 유지한다.
+MATLAB \texttt{phased.CFARDetector2D}를 \texttt{Pfa}$=10^{-4}$,
+Training $[8,4]$, Guard $[4,2]$로 설정했다. 이는 Phased Array Toolbox의
+\texttt{CFARDetectionExample}을 본 시스템 파라미터에 맞춰 변형한 것이다.
+
+\begin{designbox}{SNR/강도를 함께 출력하는 이유}
+\texttt{ThresholdOutputPort}를 켜서 각 검출의 잡음 임계값을 함께 받는다. 이로부터
+\[
+  \text{SNR} = \frac{\text{power}}{\text{noise threshold}},\qquad
+  \text{power} = |\text{셀 값}|^2
+\]
+를 계산해 검출의 \emph{신뢰도}를 정량화한다. 융합 단계에서 SNR이 낮은(약한) 검출은
+거리 기준에서 배제하고 깊이 추정으로 대체하는 데 이 값이 핵심으로 쓰인다(Part V).
+\end{designbox}
+
+\section{설계 결정 — 클러스터링을 Python으로 위임}
+\begin{designbox}{검출점만 내보내고 물체 분리는 융합 단계에서}
+전통적 레이더 파이프라인은 MATLAB 안에서 클러스터링(DBSCAN 등) + 추적을 한다.
+본 시스템은 \textbf{검출점(range, azimuth, doppler, power, snr)을 그대로} 내보내고,
+``어느 점이 어느 물체인가''는 Python \texttt{radar\_fusion}이 \emph{YOLO bbox/마스크}와
+\emph{DA3 깊이 게이트}로 결정한다. 카메라가 이미 물체 경계를 알고 있으므로, 레이더
+단독 클러스터링보다 카메라 경계로 묶는 편이 정확하고 모호성이 적다.
+\end{designbox}
+
+\chapter{구현 및 디렉토리 구조}
+
+\section{\texttt{matlab/radar\_live.m} — 실시간 폴링 루프}
+\begin{enumerate}
+  \item \texttt{iqData\_RecordingParameters.mat}에서 레이더 파라미터를 1회 로드
+        (메타 게이트로 보장됨).
+  \item \texttt{phased} 시스템 객체 1회 생성: \texttt{RangeDopplerResponse}(Hann 창),
+        \texttt{CFARDetector2D}(CA), \texttt{BeamscanEstimator}(DOA), \texttt{ULA}(8소자).
+  \item \texttt{POLL\_SEC=0.2}마다 \texttt{dca1000FileReader}를 재생성해 새로 쌓인
+        데이터큐브를 읽고, 가장 최근 완결 프레임을 처리.
+  \item 파이프라인: \texttt{readRadarCube} → \texttt{rangeDopplerMap} →
+        \texttt{cfarDetect} → \texttt{estimateAzimuth}.
+\end{enumerate}
+
+\section{모듈 — \texttt{matlab/modules/}}
+\begin{center}
+\begin{tabular}{@{}lp{8.5cm}@{}}
+\toprule
+파일 & 역할 \\
+\midrule
+\texttt{readRadarCube.m}    & raw ADC 큐브 → 가상 배열 데이터 정렬 \\
+\texttt{rangeDopplerMap.m}  & Range/Doppler FFT → range-doppler 응답맵 \\
+\texttt{cfarDetect.m}       & CA-CFAR로 검출 셀 + power/SNR 산출, range 게이트 \\
+\texttt{estimateAzimuth.m}  & 검출 셀별 Beamscan DOA → 방위각 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{출력 — \texttt{data/radar/targets.json}}
+프레임마다 검출 목록을 JSON으로 쓴다. 각 검출:
+\texttt{range\_m, azimuth\_deg, velocity\_mps, power, snr}. 프레임 단위로
+\texttt{frame\_idx}, \texttt{ts\_ms}(타임스탬프)를 포함한다. 최대
+\texttt{topN=50}개(bbox 매칭용으로 넉넉히), range 게이트 $0.3\sim6.0$\,m.
+
+\begin{designbox}{원자적 쓰기(atomic write)}
+Python이 읽는 도중 MATLAB이 덮어쓰면 깨진 JSON을 읽을 수 있다. 임시 파일
+(\texttt{targets.json.tmp})에 먼저 쓰고 \texttt{movefile}로 교체해, 항상 완결된
+파일만 보이도록 한다.
+\end{designbox}
+
+\chapter{문제 해결 과정}
+
+\section{타임스탬프 동기화}
+레이더와 카메라는 서로 다른 스트림이다. 송신측에서 각 프레임에 \texttt{ts\_ms}를
+찍고(\texttt{iqData\_timestamps.csv}), MATLAB은 처리한 프레임의 \texttt{frame\_idx}에
+해당하는 \texttt{ts\_ms}를 \texttt{targets.json}에 넣는다. 융합 단계에서는 카메라
+프레임 시각과 가장 가까운 레이더 프레임을 시간 허용오차 내에서 매칭한다
+(Part V의 \texttt{load\_latest\_targets}).
+
+\section{방위각 부호 일관성}
+레이더 좌표계와 카메라 좌표계의 좌우(방위각 부호)가 뒤집힐 수 있다.
+\texttt{radar\_fusion.py}의 \texttt{NEGATE\_AZIMUTH} 플래그로 토글하여 두 좌표계를
+맞춘다(코드에 경고 주석으로 명시).

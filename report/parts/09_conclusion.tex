@@ -1,0 +1,47 @@
+\chapter{성과와 완성도}
+
+\section{성과 요약}
+mmWave 레이더와 단안 카메라를 방위각으로 대응시켜, 각 객체까지의 실제 거리를
+실시간으로 추정하는 융합 파이프라인을 구축했다. 레이더의 약검출/노이즈를
+SNR 게이트, 속도 적응 EMA, 스케일 신뢰 게이트로 견고하게 보완했다(2D 융합 결과는
+그림~\ref{fig:viewer2d}). 3D 장면 복원(동적 배경, 객체 메시 생성)은 부분적으로
+동작하며(그림~\ref{fig:viewer3d}), 포즈 정합과 뷰어 정합은 진행 중이다.
+
+\section{완성도 매트릭스}
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+컴포넌트 & 상태 & 비고 \\
+\midrule
+송수신(UDP/메타 게이트)        & 완성   & 청크 재조립, 메타 필수 게이트 \\
+레이더 신호처리(CFAR)          & 완성   & 검출점 출력, SNR/power \\
+객체 검출/추적(YOLO+ReID)      & 완성   & IOU+중심거리, DB 재식별 \\
+단안 깊이(DA3 metric)          & 완성   & raw metric, 50\% 침식 샘플링 \\
+레이더--카메라 융합            & 완성   & v 적응 EMA, 스케일 신뢰 게이트 \\
+동적 배경(DynBG)               & 완성   & 박제 방지(REVEAL\_MIN) \\
+객체 3D 생성(TRELLIS)          & 부분   & GLB 생성 동작 \\
+객체 포즈(GigaPose)            & 미완성 & score $0.1\sim0.2$, 자세 신뢰 불가 \\
+3D 뷰어 객체 정합              & 미완성 & 위치/크기 동작, 자세/일부 좌표 정합 미완 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\chapter{한계와 향후 과제}
+
+\section{한계}
+\begin{itemize}
+  \item GigaPose 포즈 추정 실패로 객체 자세를 신뢰할 수 없다.
+  \item DA3 metric은 절대 스케일이 과소(약 1/2.5)라 ratio 보정에 의존한다.
+  \item 라이브 DA3 재추론이 7초 주기라 빠른 이동 시 깊이가 지연된다.
+  \item 수신 버퍼(\texttt{SO\_RCVBUF}) 확대, 송신측 웹캠 재연결은 미적용.
+\end{itemize}
+
+\section{향후 과제}
+\begin{itemize}
+  \item \textbf{실시간 사람 메시(HMR)}: \texttt{person}은 3D 생성에서 제외 중인데,
+        HMR로 사람 메시를 실시간 복원해 장면에 포함.
+  \item \textbf{2-tier 오프라인 고품질 재현}: 라이브는 경량으로, 사후에 고품질
+        업스케일/메시/포즈로 재구성.
+  \item \textbf{포즈 정합 개선}: 멀티뷰 TRELLIS 품질 향상 + 입력/템플릿 정합 점검.
+  \item \textbf{3D 뷰어 좌표계 통일} 및 실시간 깊이 반영.
+\end{itemize}

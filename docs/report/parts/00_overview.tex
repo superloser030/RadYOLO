@@ -1,0 +1,201 @@
+\chapter{배경과 목표}
+
+\section{문제 정의}
+단일 RGB 카메라는 풍부한 의미 정보(클래스, 외형)를 주지만 \emph{절대 거리}를 모른다.
+단안 깊이 추정(DepthAnything 등)은 상대 깊이만 신뢰할 수 있고 미터 단위 스케일은
+장면마다 모호하다. 반대로 mmWave 레이더는 \emph{정확한 거리/속도}를 주지만 객체가
+무엇인지, 화면의 어디에 있는지는 모른다. 본 프로젝트는 두 센서를 융합하여
+``카메라가 본 각 객체까지의 실제 거리''를 실시간으로 추정하고, 나아가 장면을
+3D로 복원하는 것을 목표로 한다.
+
+\section{핵심 아이디어}
+\begin{itemize}
+  \item \textbf{레이더로 카메라 깊이를 미터로 고정}: 레이더가 확실히 잡은 객체의
+        거리를 기준으로 단안 깊이(DA3)의 스케일을 보정한다.
+  \item \textbf{역할 분담}: 레이더는 거리/속도/방위각, 카메라는 클래스/마스크/화면 위치.
+        둘을 방위각으로 대응시켜 융합한다.
+  \item \textbf{확장}: 융합된 거리를 이용해 객체를 3D로 배치하고, 단일 이미지 → 3D
+        메시 생성으로 장면을 복원한다(2부, 진행 중).
+\end{itemize}
+
+\chapter{시스템 구성}
+
+\section{하드웨어 토폴로지}
+시스템은 두 대의 컴퓨터로 분리되어 있다.
+\begin{itemize}
+  \item \textbf{노트북 (송신측)}: TI AWR1642 mmWave 레이더 + DCA1000EVM(raw ADC 캡처
+        보드), USB 웹캠. 센서 데이터를 캡처해 UDP로 송신한다.
+  \item \textbf{데스크톱 (수신·처리측)}: RTX 5080 (16\,GB). 수신, 신호처리(MATLAB),
+        딥러닝 추론(YOLO/DA3/SAM2/GigaPose), 융합, 웹 뷰어를 모두 담당한다.
+  \item \textbf{네트워크}: Tailscale 기반 직결(direct) 연결. 레이더 raw ADC와 웹캠
+        JPEG을 각각 별도 UDP 포트로 전송한다.
+\end{itemize}
+
+\begin{designbox}{왜 송수신을 분리했는가}
+레이더 캡처(DCA1000 + TI CLI)는 Windows 드라이버/하드웨어에 묶여 있고, 무거운
+딥러닝 추론은 고성능 GPU가 필요하다. 캡처 노드와 처리 노드를 분리하면 각자
+최적 환경에서 동작하고, 처리측 부하가 캡처 타이밍에 영향을 주지 않는다.
+\end{designbox}
+
+\section{데이터 흐름}
+\begin{lstlisting}[language=]
+[노트북] AWR1642 -> DCA1000(raw ADC) --UDP--> [데스크톱] receiver
+         웹캠(MJPG)                  --UDP-->            receiver
+                                                          |
+   receiver --(raw ADC)--> MATLAB(radar_live.m, CFAR) -> targets.json
+   receiver --(latest frame)--> YOLO11x-seg / DepthAnythingV3
+                                                          |
+                              radar_fusion (방위각 매칭 + 스케일 보정)
+                                                          |
+                          live_overlay.json  ->  웹 뷰어(2D/3D)
+\end{lstlisting}
+
+\section{사용 기술 스택}
+\begin{center}
+\begin{tabular}{@{}llp{6.2cm}@{}}
+\toprule
+구분 & 사용 모델/도구 & 역할 \\
+\midrule
+레이더 신호처리 & MATLAB Phased Array Toolbox & CA-CFAR 표적 검출
+  (\texttt{CFARDetectionExample} 예제 기반) \\
+객체 검출/분할 & YOLO11x-seg & 클래스 + 인스턴스 마스크 \\
+정밀 분할 & SAM2 (hiera-large) & 3D 입력용 깨끗한 cutout \\
+단안 깊이 & DepthAnythingV3 (metric/Raw) & 미터 단위 깊이맵(ComfyUI) \\
+이미지 업스케일 & Real-ESRGAN ($\times4$) & 배경 화질 향상(ComfyUI) \\
+3D 메시 생성 & TRELLIS (fal-ai API) & 이미지 → GLB 메시 \\
+6DoF 포즈 & GigaPose & 객체 자세 추정 \emph{(미완성)} \\
+3D 뷰어 & Three.js & 포인트클라우드 + GLB 렌더 \emph{(진행 중)} \\
+전송/네트워크 & UDP + Tailscale & raw ADC / 웹캠 스트리밍 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{디렉토리 최상위 구조}
+\begin{lstlisting}[language=]
+RadYOLO/
+  main_r.py              # 수신측 메인 (상태머신 + 융합 + 뷰어 서버)
+  src/
+    transmission/        # sender.py, receiver.py
+    objects/             # radar_fusion, obj_crop, trellis_gen, pose_estimator
+    background/          # depth, dynamic_bg_fill, upscale, bg_select
+    utils/               # config, gpu_scheduler, radar_cam_calib, archive
+    viewer/              # viewer.html (2D/3D 통합 뷰어)
+  matlab/                # radar_live.m, cfarDetect.m (CFAR 신호처리)
+  workflows_comfyui/     # DA3/ESRGAN ComfyUI 워크플로 JSON
+  config/                # network.toml, sender.toml, receiver.toml
+  tools/                 # dca1000(캡처 CLI), gigapose(외부 repo)
+  data/                  # 생성물(scene/objects/radar/webcam) — gitignore
+\end{lstlisting}
+각 디렉토리의 상세 역할은 해당 Part의 ``구현 및 디렉토리 구조'' 장에서 다루고,
+전체 트리는 부록에 정리한다.
+
+\chapter{실행 파이프라인과 동시성}
+
+\section{수신측 메인 흐름 — \texttt{main\_r.py}}
+플래그 없이 실행하면 다음 순서로 초기화 후 라이브 루프에 진입한다.
+\begin{enumerate}
+  \item \textbf{아카이브}: 이전 \texttt{data/}를 \texttt{archive/}로 이동
+        (객체 GLB/템플릿/\texttt{.mat}은 보존 후 복원). 세션 시작 기록.
+  \item \textbf{수신 스레드 기동}: \texttt{meta\_receive}, \texttt{radar\_receive},
+        \texttt{webcam\_receive}를 데몬 스레드로 시작.
+  \item \textbf{메타 게이트}: \texttt{\_wait\_meta\_start\_radar} — 메타 도착까지 대기
+        후 MATLAB \texttt{radar\_live} 기동.
+  \item \textbf{Step 0.5}: 레이더/웹캠 수신 확인(3초).
+  \item \textbf{Step 1--2}: 배경 프레임 선택(10초) → Real-ESRGAN 업스케일.
+  \item \textbf{Step 3}: DepthAnythingV3 깊이 추정.
+  \item \textbf{Step 3.5}: (legacy) 레이더 기반 깊이 보정 — metric 모드에서는 무의미.
+  \item \textbf{Step 4}: 첫 마스크(초기 객체 식별 + 배경 구멍).
+  \item \textbf{뷰어 + 라이브}: HTTP 뷰어 서버 + \texttt{live\_update\_loop}(상태머신) +
+        \texttt{DynBG} 스레드 시작.
+\end{enumerate}
+
+\section{스레드/프로세스 구조}
+\begin{center}
+\begin{tabular}{@{}lp{8cm}@{}}
+\toprule
+실행 단위 & 역할 \\
+\midrule
+수신 스레드 $\times3$ & meta/radar/webcam UDP·TCP 수신 \\
+MATLAB 프로세스    & \texttt{radar\_live.m} CFAR (subprocess, 로그 파일) \\
+라이브 루프 스레드 & YOLO 검출 + 융합 + 상태머신(0.3\,s 주기) \\
+DynBG 스레드       & 동적 배경 채우기(프레임 폴링) \\
+모델링/포즈 스레드 & 객체별 3D 생성·포즈를 \emph{비동기}로(라이브 비차단) \\
+GigaPose 프로세스  & 별도 conda 환경 inference 서버(stdin/stdout) \\
+HTTP 뷰어 서버     & \texttt{viewer.html} 정적 서빙 + \texttt{/stream} MJPEG \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{designbox}{무거운 작업은 전부 비동기}
+3D 생성(30$\sim$60초), 포즈 추정, DA3 재추론은 모두 백그라운드 스레드/프로세스로
+던지고 라이브 루프는 즉시 다음 프레임으로 넘어간다. \texttt{\_busy} 플래그로 객체별
+중복 실행을 막는다. 이로써 비싼 작업 중에도 거리 추정/표시가 끊기지 않는다.
+\end{designbox}
+
+\section{실행 모드(플래그)}
+\texttt{--verify}/\texttt{--calib}(경량: 수신+YOLO+뷰어),
+\texttt{--skip-bg/-depth/-3d/-calib}(단계 생략), \texttt{--no-radar}(웹캠만),
+\texttt{--viewer-only}(뷰어만). 상세는 부록 참조.
+
+\chapter{세션 관리·저장·아카이브}
+
+\section{세션 추적 — \texttt{src/utils/archive.py}}
+실행마다 \texttt{data/.session\_start}(시작 시각)와 10초 주기
+\texttt{.session\_heartbeat}를 남긴다. 다음 실행 시작 시, 직전 세션의
+\texttt{data/}를 \texttt{archive/\{시작$\sim$끝\}/}로 \emph{이동}한다(끝 시각은
+heartbeat로 추정). 같은 이름이 있으면 \texttt{\_2, \_3}을 붙인다.
+
+\begin{designbox}{아카이브 시 보존 항목}
+재생성이 비싼 \textbf{객체 GLB·템플릿}과 \textbf{레이더 파라미터 \texttt{.mat}}은
+아카이브 전에 메모리/임시폴더로 보존했다가 새 \texttt{data/}에 복원한다. 덕분에
+세션을 다시 시작해도 모델링·메타를 재수행하지 않는다(DB 재식별과 함께 작동).
+\end{designbox}
+
+\section{저장 포맷과 디렉토리}
+\begin{center}
+\begin{tabular}{@{}lp{8cm}@{}}
+\toprule
+경로 & 내용/포맷 \\
+\midrule
+\texttt{data/radar/iqData\_Raw\_*.bin} & raw ADC, chirp 크기 단위 누적
+   (\texttt{100\,MB} 단위 롤오버) \\
+\texttt{data/radar/iqData\_timestamps.csv} & frame\_idx, ts\_ms 동기화 \\
+\texttt{data/radar/iqData\_RecordingParameters.mat} & MATLAB 신호처리 파라미터 \\
+\texttt{data/radar/targets.json} & CFAR 검출(원자적 쓰기) \\
+\texttt{data/webcam/frame\_*.jpg} & 수신 프레임 + \texttt{webcam\_timestamps.csv} \\
+\texttt{data/scene/} & background, depth\_metric.npy, depth\_bg, live\_overlay.json \\
+\texttt{data/objects/<cls>\_<tid>/} & views, cutout, mask, GLB, templates, pose \\
+\texttt{db/<cls>\_<hash>/} & 재식별용 GLB + appearance.npy \\
+\bottomrule
+\end{tabular}
+\end{center}
+raw ADC와 타임스탬프를 함께 저장하므로, 세션 종료 후 \texttt{.bin}을 다시 읽어
+오프라인 재처리가 가능하다(설계 철학 Part 참조).
+
+\chapter{공통 인프라}
+
+\section{설정 시스템 — \texttt{src/utils/config.py}}
+TOML 3종(\texttt{network/sender/receiver})을 로드하고, \texttt{resolve\_level}로
+레벨 인덱스를 구체 파라미터로 전개한다(\texttt{num\_loops}, \texttt{frame\_period\_ms},
+\texttt{bin\_frame\_size}, \texttt{restart\_at\_seq}). \texttt{export\_camera\_json}으로
+카메라 내부 파라미터를 뷰어용 \texttt{camera.json}으로 내보낸다.
+
+\section{GPU 스케줄러 — \texttt{src/utils/gpu\_scheduler.py}}
+우선순위 큐(\texttt{REALTIME/INTERACTIVE/BACKGROUND/OFFLINE}) 기반 단일 워커로
+GPU 작업을 직렬화하고, \texttt{GPUManager}로 VRAM 반환(\texttt{empty\_cache},
+ComfyUI 모델 언로드)을 관리한다. RTX 5080 16\,GB 예산 안에서 YOLO/DA3/SAM2/
+GigaPose가 공존하도록 한다.
+
+\section{유틸 모듈 일람}
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+모듈 & 역할 \\
+\midrule
+\texttt{config.py}          & TOML 로드 + 레벨 해석 + camera.json \\
+\texttt{archive.py}         & 세션 추적 + data 아카이브(보존/복원) \\
+\texttt{gpu\_scheduler.py}  & GPU 작업 큐 + VRAM 관리 \\
+\texttt{radar\_cam\_calib.py}& 외부 캘리브(yaw) 추정 루프 \\
+\bottomrule
+\end{tabular}
+\end{center}

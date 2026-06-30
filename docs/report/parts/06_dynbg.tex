@@ -1,0 +1,62 @@
+\begin{statusdone}\end{statusdone}
+
+\chapter{원리 및 설계 근거}
+
+\section{초기 배경 프레임 선정 — \texttt{bg\_select.py}}
+동적 채우기에 앞서, 10초간 촬영한 프레임 중 ``기준 배경''을 한 장 고른다.
+프레임마다 두 점수를 매긴다.
+\begin{itemize}
+  \item \textbf{경계 선명도}: 객체 마스크 경계의 색 gradient 평균 — 초점이 맞고
+        흔들리지 않은 프레임일수록 높다.
+  \item \textbf{레이더 SNR}: 매칭된 객체의 최대 SNR — 레이더가 그 순간 장면을
+        잘 보고 있을수록 높다.
+\end{itemize}
+정규화 후 \[ \text{final} = 0.25\cdot\text{선명도} + 0.75\cdot\text{SNR} \]
+로 가중 합산해 최댓값 프레임을 \texttt{background\_raw.jpg}로 저장한다. 이후
+ESRGAN 업스케일 → DA3 깊이로 이어진다.
+
+\begin{designbox}{왜 레이더 SNR에 더 큰 가중을 두는가}
+선명도만으로 고르면 객체가 많거나 흔들린 순간을 ``경계가 많아'' 선호할 수 있다.
+레이더 SNR을 주가중(0.75)으로 두면, 레이더-카메라가 \emph{동시에} 장면을 잘
+포착한 프레임이 선택되어 이후 융합 기준으로 더 적합하다.
+\end{designbox}
+
+\section{왜 동적 배경인가}
+배경 포인트클라우드(3D 뷰어)를 만들려면 객체에 가려지지 않은 깨끗한 배경이
+필요하다. 한 장으로는 객체 뒤가 비지만, \emph{시간이 지나며 객체가 비켜난 다른
+프레임}에는 그 자리가 드러난다. 여러 프레임에서 ``드러난 배경''을 모아 구멍을
+메운다.
+
+\section{누적 채우기 원리}
+초기 프레임의 객체 마스크를 ``가려진 영역(remaining)''으로 둔다. 이후 프레임마다
+\begin{itemize}
+  \item 현재 객체 마스크를 구하고, 각 픽셀이 \emph{연속으로} 객체에 안 잡힌
+        횟수(\texttt{reveal\_count})를 센다.
+  \item \texttt{REVEAL\_MIN}회 이상 연속으로 비어 있던 픽셀만 ``안정 배경''으로
+        인정하고, remaining과 교집합한 영역을 현재 프레임으로 채운다.
+  \item 충분한 면적(\texttt{cover\_min})을 새로 채우는 프레임만 선정.
+\end{itemize}
+
+\chapter{구현 및 디렉토리 구조}
+
+\section{\texttt{src/background/dynamic\_bg\_fill.py}}
+\begin{itemize}
+  \item YOLO seg로 매 프레임 객체 마스크(+\texttt{mask\_dilate\_px} 팽창).
+  \item \texttt{reveal\_count}로 연속 빈 프레임 카운트, \texttt{REVEAL\_MIN} 이상만 채움.
+  \item 누적 채운 양이 \texttt{upscale\_steps}($0.2, 0.25, 0.3$) 단계에 도달하면
+        Real-ESRGAN($\times4$, 실패 시 lanczos)으로 업스케일 → \texttt{background.jpg}.
+  \item \texttt{\_rerun\_depth(bg)}로 채워진 배경의 깊이를 재추론
+        (\texttt{depth\_bg.png}), 뷰어에 재빌드 신호.
+\end{itemize}
+관련 설정은 \texttt{config/receiver.toml}의 \texttt{[dynamic\_bg]}.
+
+\chapter{문제 해결 과정}
+
+\section{사람 박제(burn-in) 방지}
+\textbf{증상}: 가만히 앉은 사람의 상체가 통째로 배경에 굳어 남았다.\\
+\textbf{원인}: \texttt{REVEAL\_MIN=3}($\approx0.3$초)으로 너무 짧아, YOLO가 사람을
+잠깐 놓친 3프레임을 ``배경''으로 인정하고 박제. 한 번 채우면 remaining에서
+빠져 되돌릴 수 없다.\\
+\textbf{해결}: \texttt{REVEAL\_MIN}을 15($\approx1.5$초)로 올려 \texttt{receiver.toml}에
+노출. 객체가 실제로 1.5초 이상 비켜야 채운다. 마스크 팽창(\texttt{mask\_dilate\_px=15})으로
+경계 잔상도 억제.
