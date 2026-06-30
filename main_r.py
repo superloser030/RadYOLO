@@ -337,21 +337,14 @@ def live_update_loop(cam_cfg, enable_pose=True):
         return depth_to_range(dep[by, bx] / 255.0, cal)
 
     def _da3_rerun(frame_raw):
+        # live 모드: 현재 프레임 → depth_metric.npy 만 갱신(_mask_dist 객체거리).
+        # 뷰어 배경(depth_bg.png/calib)은 안 건드림 — 배경/현재프레임 depth 충돌 방지.
         try:
             raw = SCENE / "da3_raw.jpg"
             cv2.imwrite(str(raw), frame_raw)
-            generate_depth(input_path=str(raw))
-            if not METRIC_PATH.exists():
-                cal = _depth_calib[0]
-                if cal is not None:
-                    d = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
-                    if d is not None:
-                        if d.ndim != 2:
-                            d = d[:, :, 0]
-                        cn = apply_calib(d.astype(np.float32) / 255.0, cal)
-                        cv2.imwrite(str(DEPTH_PATH), (cn * 255).astype(np.uint8))
+            generate_depth(input_path=str(raw), mode="live")
             _reload_depth()
-            print("[State] DA3 재추론 → depth 갱신")
+            print("[State] DA3 재추론(live) → metric 갱신")
         except Exception as e:
             print(f"[State] DA3 재추론 실패: {e}")
 

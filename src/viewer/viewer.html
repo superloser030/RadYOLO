@@ -318,7 +318,10 @@ function _buildPointsGeo(color, depth, maskImg, W, H, fx, fy, cx, cy) {
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
     const px = c * STEP, py = r * STEP, pi = (py * W + px) * 4;
     if (maskImg && maskImg.data.data[pi] > 128) continue;
-    const dc = depthToCam(depth.data.data[pi] / 255);
+    // depth/mask 가 color(W,H)와 크기 다를 수 있어 각자 크기로 인덱싱
+    const dx = Math.min(depth.w - 1, Math.floor(px * depth.w / W));
+    const dy = Math.min(depth.h - 1, Math.floor(py * depth.h / H));
+    const dc = depthToCam(depth.data.data[(dy * depth.w + dx) * 4] / 255);
     positions[count*3]   = (px - cx) / fx * dc;
     positions[count*3+1] = -(py - cy) / fy * dc;
     positions[count*3+2] = -dc;
@@ -360,7 +363,7 @@ async function build3D() {
   dl.position.set(1, 2, 2); scene.add(dl);
 
   const camCfg = await fetch('/data/scene/camera.json').then(r => r.json());
-  _calib = await fetch('/data/scene/depth_calib.json')
+  _calib = await fetch('/data/scene/depth_bg_calib.json')
     .then(r => r.ok ? r.json() : null).catch(() => null);
   if (_calib) {
     const midZ = -(_calib.range_min_m + _calib.range_max_m) / 2;
@@ -373,7 +376,7 @@ async function build3D() {
   }
 
   const hasMask = await fetch('/data/scene/mask.png', { method: 'HEAD' }).then(r => r.ok).catch(() => false);
-  const loads = [getImageData('/data/scene/background.jpg'), getImageData('/data/scene/depth.png')];
+  const loads = [getImageData('/data/scene/background.jpg'), getImageData('/data/scene/depth_bg.png')];
   if (hasMask) loads.push(getImageData('/data/scene/mask.png'));
   const [color, depth, maskImg] = await Promise.all(loads);
 
@@ -397,12 +400,14 @@ async function pollBgUpdate() {
       .then(r => r.ok ? r.text().then(t => t.trim()) : '').catch(() => '');
     if (!ts || ts === bgTsCache) return;
     bgTsCache = ts;
-    // depth_calib 재로드 (DynBG가 재보정 후 파일 갱신했을 수 있음)
-    _calib = await fetch('/data/scene/depth_calib.json?_=' + Date.now())
+    // 배경 calib/depth/color 를 같은 _=ts 로 묶어 한 시점 스냅샷 로드(불일치 방지).
+    // depth_bg 는 DynBG 만 쓰므로 라이브(현재프레임) depth 와 섞이지 않는다.
+    const cb = '?_=' + ts;
+    _calib = await fetch('/data/scene/depth_bg_calib.json' + cb)
       .then(r => r.ok ? r.json() : null).catch(() => null);
     const [color, depth] = await Promise.all([
-      getImageData('/data/scene/background.jpg?_=' + Date.now()),
-      getImageData('/data/scene/depth.png?_=' + Date.now()),
+      getImageData('/data/scene/background.jpg' + cb),
+      getImageData('/data/scene/depth_bg.png' + cb),
     ]);
     const { W, H, fx, fy, cx, cy } = _bgCamCfg;
     // 갱신 시점엔 마스크 없이 (드러난 배경 픽셀이 마스크 영역과 겹칠 수 있음)

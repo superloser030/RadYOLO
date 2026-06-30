@@ -52,20 +52,11 @@ def _rerun_depth(bg_path: Path):
     def _work():
         try:
             from src.background.depth import generate_depth
-            from src.background.depth_calibration import apply_calib
-            generate_depth(input_path=str(bg_path))
-            if not (SCENE / "depth_metric.npy").exists():
-                calib_p = SCENE / "depth_calib.json"
-                if calib_p.exists():
-                    cal = json.loads(calib_p.read_text())
-                    d = cv2.imread(str(SCENE / "depth.png"), cv2.IMREAD_GRAYSCALE)
-                    if d is not None:
-                        if d.ndim != 2:
-                            d = d[:, :, 0]
-                        cn = apply_calib(d.astype(np.float32) / 255.0, cal)
-                        cv2.imwrite(str(SCENE / "depth.png"), (cn * 255).astype(np.uint8))
+            # bg 모드: 채워진 배경 → depth_bg.png + depth_bg_calib.json (뷰어 배경 전용).
+            # depth_metric.npy(라이브 객체거리)는 안 건드림 — 배경/현재프레임 충돌 방지.
+            generate_depth(input_path=str(bg_path), mode="bg")
             (SCENE / "bg_ts.txt").write_text(str(time.time()))
-            print("[DynBG] depth.png 갱신 완료 → 뷰어 포인트클라우드 재빌드 신호")
+            print("[DynBG] depth_bg 갱신 완료 → 뷰어 포인트클라우드 재빌드 신호")
         except Exception as e:
             print(f"[DynBG] depth 재추론 실패: {e}")
         finally:
