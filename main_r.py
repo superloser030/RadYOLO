@@ -519,10 +519,17 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 o["da3_m"] = round(float(da3), 2)
             da3_str = f"DA3 {da3:5.2f}m" if da3 is not None else "DA3  --  "
             if radar and radar.get("snr", 0) >= SNR_MIN:
-                o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
+                # v 적응 거리 EMA: 정지(v≈0)면 강한 smooth(R 널뛰기 흡수), 동적이면 추종.
+                # v 는 range 와 같은 검출점 도플러 — 정지물체는 v≈0 가 robust 해 R 안정화에 신뢰.
+                R_meas = radar["range_m"]
+                alpha  = 0.5 if abs(radar["velocity_mps"]) >= 0.1 else 0.15
+                prev   = r.get("r_smooth")
+                r_sm   = prev + alpha * (R_meas - prev) if prev is not None else R_meas
+                r["r_smooth"] = r_sm
+                o["range_m"] = round(r_sm, 2); o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
                 o["snr"] = radar.get("snr")
-                fusion_lines.append(f"[Fusion] {inst:14} R {radar['range_m']:5.2f}m | {da3_str} | "
+                fusion_lines.append(f"[Fusion] {inst:14} R {r_sm:5.2f}m(meas {R_meas:5.2f}) | {da3_str} | "
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
                                     f"snr {radar.get('snr', 0):5.1f} | v {radar['velocity_mps']:+5.2f} | {r['state']}")
             elif da3 is not None and (r.get("ratio") or _da3_scale[0] > 0):
