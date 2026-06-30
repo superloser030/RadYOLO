@@ -223,14 +223,16 @@ def _snr_cluster(pts, gap_m=0.7):
 def match_all(targets, objs, cam):
     """여러 객체 일괄 매칭 — 거리 게이트 없음 + 겹친 물체 DA3 깊이순 분리.
 
-    objs: [{"tid", "bbox", "mask"(optional), "da3"(optional)}].
+    objs: [{"tid", "bbox", "mask"(optional), "da3"(optional), "expected"(optional)}].
+      expected = DA3×비율(예상 미터거리). 겹침 시 점을 예상거리 최근접 객체에 배정.
     반환 {tid: matchdict | None}.
 
     1) 각 레이더 점을 방위각으로 매칭되는 객체(들)에 배정
     2) 1개 객체만 매칭 → 그 객체 점
-    3) 여러 객체 겹침(같은 az) → 그 점들을 거리 클러스터로 나눠, 객체를 DA3
-       오름차순(앞→뒤)으로 정렬해 가까운 클러스터→앞 객체로 배정. DA3 절대값은
-       안 쓰고 '앞/뒤 순서'만 쓴다 — DA3 스케일이 틀려도 분리는 정확하다.
+    3) 여러 객체 겹침(같은 az):
+       - expected(예상거리) 있으면 → 각 점을 예상거리 가장 가까운 객체에 배정.
+         (한 물체가 레이더 약반사로 자기 점이 없으면 먼 점을 안 받고 miss→DA3추정)
+       - 없으면(첫 등장) → 거리 클러스터를 DA3 오름차순(앞→뒤)으로 분배 fallback
     4) 객체별 배정 점 median → 거리
     """
     profs = [_azimuth_profile(o["bbox"], o.get("mask"), cam) for o in objs]
@@ -247,14 +249,22 @@ def match_all(targets, objs, cam):
         elif len(hit) > 1:
             overlap.setdefault(frozenset(hit), []).append(t)
 
-    # 겹침 그룹: 거리 클러스터 ↔ DA3 깊이 순서 배정
+    # 겹침 그룹 배정
     for grp, pts in overlap.items():
-        grp_objs = sorted(grp, key=lambda i: (objs[i].get("da3")
-                                              if objs[i].get("da3") is not None else 1e9))
-        pts_sorted = sorted(pts, key=lambda t: t["range_m"])
-        clusters = _split_by_gaps(pts_sorted, len(grp_objs))
-        for ci, cl in enumerate(clusters):
-            obj_pts[grp_objs[min(ci, len(grp_objs) - 1)]].extend(cl)
+        have_exp = [i for i in grp if objs[i].get("expected") is not None]
+        if have_exp:
+            # 예상거리(DA3×비율) 최근접 객체에 점 배정. 약반사로 자기 점 없는
+            # 가까운 물체는 먼 점을 안 받아 miss → DA3 추정으로 빠진다.
+            for t in pts:
+                best = min(have_exp, key=lambda i: abs(t["range_m"] - objs[i]["expected"]))
+                obj_pts[best].append(t)
+        else:
+            grp_objs = sorted(grp, key=lambda i: (objs[i].get("da3")
+                                                  if objs[i].get("da3") is not None else 1e9))
+            pts_sorted = sorted(pts, key=lambda t: t["range_m"])
+            clusters = _split_by_gaps(pts_sorted, len(grp_objs))
+            for ci, cl in enumerate(clusters):
+                obj_pts[grp_objs[min(ci, len(grp_objs) - 1)]].extend(cl)
 
     # 객체별: 배경 누수 제거 — SNR 합 최대 거리 클러스터만 남겨 median
     return {objs[i]["tid"]: _aggregate(_snr_cluster(obj_pts[i]))

@@ -392,7 +392,8 @@ def live_update_loop(cam_cfg, enable_pose=True):
     COLLECT_TIMEOUT = 30.0    # 30초 경과 시 보유 뷰로 강제 진입
     MOVE_TH        = 0.30     # bbox폭 대비 중심이동 임계값
     _last_fusion = 0.0
-    _da3_scale   = [0.0]      # R/DA3 비율(EMA) — 레이더 못 잡는 객체를 DA3×scale 로 대체
+    _da3_scale   = [3.0]      # 전역 R/DA3 비율(median) — 미잡힌 객체 fallback. 초기 3.0
+                              #   (metric DA3 가 대략 ×3 과소). 실측 누적되면 갱신.
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -499,8 +500,12 @@ def live_update_loop(cam_cfg, enable_pose=True):
         # match_all: 거리 게이트 없이 방위각 매칭 + 겹친 물체(같은 az)는 DA3 깊이순 분리.
         # DA3(d["mdist"])는 절대 필터가 아니라 겹침 분리 순서로만 쓴다.
         det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
+        # expected = DA3×비율(예상 미터거리). 겹침 시 점을 예상거리 최근접 객체에 배정해
+        # 약반사로 자기 점 없는 가까운 물체에 먼 점이 오배정되는 것 방지.
         match_objs   = [{"tid": tid, "bbox": registry[tid]["bbox"],
-                         "mask": d["m_frame"], "da3": d.get("mdist")}
+                         "mask": d["m_frame"], "da3": d.get("mdist"),
+                         "expected": (d["mdist"] * (registry[tid].get("ratio") or _da3_scale[0]))
+                                     if d.get("mdist") else None}
                         for tid, d in det_by_tid.items() if tid in registry]
         radar_by_tid = match_all(targets, match_objs, cam_cfg)
 
