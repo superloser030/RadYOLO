@@ -59,15 +59,18 @@ def _rerun_depth(bg_path: Path):
             from src.background.depth import generate_depth
             from src.background.depth_calibration import apply_calib
             generate_depth(input_path=str(bg_path))
-            calib_p = SCENE / "depth_calib.json"
-            if calib_p.exists():
-                cal = json.loads(calib_p.read_text())
-                d = cv2.imread(str(SCENE / "depth.png"), cv2.IMREAD_GRAYSCALE)
-                if d is not None:
-                    if d.ndim != 2:
-                        d = d[:, :, 0]
-                    cn = apply_calib(d.astype(np.float32) / 255.0, cal)
-                    cv2.imwrite(str(SCENE / "depth.png"), (cn * 255).astype(np.uint8))
+            # metric(Raw) 모드면 generate_depth 가 시각화 depth.png 를 이미 만들었고
+            # calib 은 metric_linear(a/b 없음) → log apply_calib 스킵. 아니면 log 보정.
+            if not (SCENE / "depth_metric.npy").exists():
+                calib_p = SCENE / "depth_calib.json"
+                if calib_p.exists():
+                    cal = json.loads(calib_p.read_text())
+                    d = cv2.imread(str(SCENE / "depth.png"), cv2.IMREAD_GRAYSCALE)
+                    if d is not None:
+                        if d.ndim != 2:
+                            d = d[:, :, 0]
+                        cn = apply_calib(d.astype(np.float32) / 255.0, cal)
+                        cv2.imwrite(str(SCENE / "depth.png"), (cn * 255).astype(np.uint8))
             (SCENE / "bg_ts.txt").write_text(str(time.time()))   # 뷰어 재빌드 신호
             print("[DynBG] depth.png 갱신 완료 → 뷰어 포인트클라우드 재빌드 신호")
         except Exception as e:
