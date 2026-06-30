@@ -347,15 +347,14 @@ def live_update_loop(cam_cfg, enable_pose=True):
         return depth_to_range(dep[by, bx] / 255.0, cal)
 
     def _da3_rerun(frame_raw):
-        """새 물체용: 현재 프레임 → ESRGAN 업스케일 → DA3 (배경과 '동일' 파이프라인)
-        → depth.png 갱신(같은 보정계수 재적용). background.jpg(씬 배경)는 안 건드림.
-        ※ 배경도 ESRGAN 후 DA3 이므로, 재추론도 같은 화질 경로를 타야 depth 가 일관됨."""
+        """라이브 DA3 재추론: 현재 프레임(1920) → DA3 직행 (ESRGAN 생략).
+        ESRGAN(x4)이 Trellis/pose 와 GPU 경합해 75초까지 튀어 5초 주기가 막혔다.
+        DA3 자체는 1초 내라, 라이브 metric(거리용)은 ESRGAN 없이 보간 1920 으로 충분.
+        배경 depth(background.jpg)는 여전히 ESRGAN 경로 유지 — 라이브 재추론만 경량화."""
         try:
             raw = SCENE / "da3_raw.jpg"
-            up  = SCENE / "da3_up.jpg"
-            cv2.imwrite(str(raw), frame_raw)
-            upscale_image(input_path=str(raw), output_path=str(up))   # ESRGAN (배경과 동일)
-            generate_depth(input_path=str(up))
+            cv2.imwrite(str(raw), frame_raw)         # frame_raw 는 이미 cam_w(1920)
+            generate_depth(input_path=str(raw))      # ESRGAN 생략, DA3 직행
             # metric(Raw) 모드면 generate_depth 가 시각화 depth.png 를 이미 만들었고
             # 거리는 .npy 라 log calib 불필요 → 스킵. 아니면 기존 log_linear 보정.
             if not METRIC_PATH.exists():
@@ -373,13 +372,13 @@ def live_update_loop(cam_cfg, enable_pose=True):
             print(f"[State] DA3 재추론 실패: {e}")
 
     def _da3_rerun_shared(frame_big):
-        """동시 MODELING 여러 개여도 DA3 재추론 1회만(락 + 5초 디바운스). depth 는 전체
+        """동시 MODELING 여러 개여도 DA3 재추론 1회만(락 + 7초 디바운스). depth 는 전체
         프레임이라 객체마다 돌릴 필요 없음 → 중복/충돌 방지."""
         if not _da3_lock.acquire(blocking=False):
             return                          # 이미 누가 재추론 중 → 공유(스킵)
         try:
-            if time.time() - _da3_last[0] < 5.0:
-                return                      # 최근 5초 내 했으면 재사용
+            if time.time() - _da3_last[0] < 7.0:
+                return                      # 최근 7초 내 했으면 재사용
             _da3_rerun(frame_big)
             _da3_last[0] = time.time()
         finally:
@@ -504,9 +503,9 @@ def live_update_loop(cam_cfg, enable_pose=True):
         # ── 3. 거리 매칭 + overlay + 상태 전이 ──
         det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
 
-        # DA3 metric 을 5초마다 현재 프레임으로 재추론(백그라운드) → depth_metric 갱신.
+        # DA3 metric 을 7초마다 현재 프레임으로 재추론(백그라운드) → depth_metric 갱신.
         # 정적 snapshot 이라 물체가 움직이면 위치 depth 가 안 맞으므로 주기적으로 새로 찍는다.
-        if time.time() - _da3_last[0] >= 5.0:
+        if time.time() - _da3_last[0] >= 7.0:
             _fb = cv2.resize(frame, (cam_w, cam_h), interpolation=cv2.INTER_LINEAR)
             threading.Thread(target=_da3_rerun_shared, args=(_fb,), daemon=True).start()
         # 재추론 완료(_da3_last 변화) → 모든 da3_0 리셋 → 새 depth 위치값으로 재설정
