@@ -135,12 +135,14 @@ async function poll2d() {
         let label = o.name;
         if (o.conf != null)    label += ' ' + o.conf.toFixed(2);
         if (o.range_m != null) {
-          label += '  ' + o.range_m.toFixed(2) + 'm';
+          label += '  R' + o.range_m.toFixed(2) + 'm';
+          if (o.da3_m != null) label += ' D' + o.da3_m.toFixed(2) + 'm';
           if (o.az != null)  label += ' az' + (o.az >= 0 ? '+' : '') + o.az.toFixed(0);
           if (o.v  != null)  label += ' v' + (o.v >= 0 ? '+' : '') + o.v.toFixed(1);
           label += ' n' + (o.n != null ? o.n : '?');
         } else {
           label += '  (no radar)';
+          if (o.da3_m != null) label += ' D' + o.da3_m.toFixed(2) + 'm';
         }
         ctx.font = '15px monospace';
         const tw = ctx.measureText(label).width;

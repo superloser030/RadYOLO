@@ -367,6 +367,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
     _next_tid = [0]
     MISS_MAX, IOU_TH = 10, 0.15
+    RADAR_TRUST_N  = 3        # 이 개수 이상 레이더 점일 때만 last_range 갱신(drift 방지)
     GRAVEYARD_TTL  = 120.0   # 120초 후 graveyard 에서 영구 삭제
     MIN_VIEWS      = 3        # COLLECTING → MODELING 최소 뷰 수
     COLLECT_TIMEOUT = 30.0    # 30초 경과 시 보유 뷰로 강제 진입
@@ -485,19 +486,24 @@ def live_update_loop(cam_cfg, enable_pose=True):
             radar = match_one(targets, r["bbox"], cam_cfg, bbox_dist=d["mdist"],
                               last_range=r.get("last_range"), last_az=r.get("last_az"),
                               mask=d["m_frame"])
+            da3 = d.get("mdist")   # 보정된 DA3 거리(m) — 레이더와 비교용
             o = {"name": inst, "cls": r["cls"], "conf": round(r["conf"], 2),
                  "bbox": [round(v) for v in r["bbox"]], "state": r["state"]}
+            if da3 is not None:
+                o["da3_m"] = round(float(da3), 2)
+            da3_str = f"DA3 {da3:5.2f}m" if da3 is not None else "DA3  --  "
             if radar:
-                # 레이더 실측(n>0)일 때만 추적 기준 갱신 — DA3/유지값 오염 방지
-                if radar.get("n_points", 0) > 0:
+                # 강한 레이더 실측(n>=RADAR_TRUST_N)일 때만 추적 기준 갱신
+                # — 약한 검출(n1~2)이 last_range 를 뒤로 끌고 가는 drift 방지
+                if radar.get("n_points", 0) >= RADAR_TRUST_N:
                     r["last_range"] = radar["range_m"]
                     r["last_az"]    = radar["azimuth_deg"]
                 o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
-                fusion_lines.append(f"[Fusion] {inst:14} {radar['range_m']:6.2f}m | "
+                fusion_lines.append(f"[Fusion] {inst:14} R {radar['range_m']:5.2f}m | {da3_str} | "
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | {r['state']}")
             else:
-                fusion_lines.append(f"[Fusion] {inst:14} miss | {r['state']}")
+                fusion_lines.append(f"[Fusion] {inst:14} miss      | {da3_str} | {r['state']}")
             overlay.append(o)
 
             if not enable_pose:
