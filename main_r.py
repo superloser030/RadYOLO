@@ -524,7 +524,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 o["snr"] = radar.get("snr")
                 fusion_lines.append(f"[Fusion] {inst:14} R {radar['range_m']:5.2f}m | {da3_str} | "
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
-                                    f"snr {radar.get('snr', 0):5.1f} | {r['state']}")
+                                    f"snr {radar.get('snr', 0):5.1f} | v {radar['velocity_mps']:+5.2f} | {r['state']}")
             elif da3 is not None and (r.get("ratio") or _da3_scale[0] > 0):
                 ratio = r.get("ratio") or _da3_scale[0]
                 est = da3 * ratio
