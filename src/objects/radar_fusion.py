@@ -126,94 +126,119 @@ def iou(a, b):
     return inter / ua if ua > 0 else 0.0
 
 
-def match_one(targets, bbox, cam, bbox_dist=None, last_range=None, last_az=None,
-              gate_da3=2.0, gate_track=0.5, mask=None):
-    """bbox 안 레이더 검출점으로 거리 추정 (DA3 초기화 + 연속성 추적 게이트).
-
-    mask(fh×fw, >0.5=물체)를 주면 bbox 사각형 대신 마스크 가로투영(그 x열에
-    물체 픽셀이 존재)으로 점을 거른다 — 겹친 물체끼리 같은 레이더 점을 공유하는
-    누수를 줄인다. 레이더는 y 가 없어 2D 마스크를 가로로 투영해서만 쓸 수 있다.
-    (거리 추정 _mask_dist 가 마스크 기준인 것과 매칭 기준을 통일)
-
-    1) bbox 가로 범위(또는 마스크 x열) 안에 투영되는 검출점만 추림 (좌우 좁히기)
-    2) 거리(앞뒤) 게이트 — 벽/뒷배경 점 제거:
-       - last_range(직전 프레임 확정 거리)가 있으면 그 ±gate_track (좁게, 추적)
-         → 움직이는 물체도 직전 거리를 따라가고, 1프레임 변화는 작으니 좁게 잡아도 됨
-       - 없으면(첫 프레임) bbox_dist(DA3 대략 거리) ±gate_da3 (넓게, 초기화)
-       - 둘 다 없으면 게이트 생략(bbox 안 전체)
-    3) 남은 점들의 거리 중앙값 → 노이즈에 강한 안정 거리
-
-    반환 {range_m, azimuth_deg, velocity_mps, n_points} 또는 None.
-    """
-    x1, _, x2, _ = bbox
-    col_has = mw = None
+def _azimuth_profile(bbox, mask, cam):
+    """객체의 방위각(화면 x) 판정 프로파일. mask 우선(가로투영), 없으면 bbox x범위."""
     if mask is not None:
-        col_has = mask.max(axis=0) > 0.5     # [fw] 각 x열에 물체 픽셀 존재?
-        mw = mask.shape[1]
-        cam_w = cam.get("width", 1920)
-    inside = []
-    for t in targets:
-        sx = radar_to_x(t["range_m"], t["azimuth_deg"], cam)
-        if sx is None:
-            continue
-        if col_has is not None:
-            col = int(sx * mw / cam_w)        # cam_w(1920) 좌표 → 마스크 열
-            if not (0 <= col < mw) or not col_has[col]:
-                continue
-        elif not (x1 <= sx <= x2):
-            continue
-        inside.append(t)
-    if not inside:
+        return ("mask", mask.max(axis=0) > 0.5, mask.shape[1], cam.get("width", 1920))
+    return ("bbox", bbox[0], bbox[2])
+
+
+def _in_profile(sx, prof):
+    """화면 x(sx)가 객체 방위각 프로파일 안인가."""
+    if sx is None:
+        return False
+    if prof[0] == "mask":
+        _, col_has, mw, cam_w = prof
+        col = int(sx * mw / cam_w)
+        return 0 <= col < mw and bool(col_has[col])
+    return prof[1] <= sx <= prof[2]
+
+
+def _aggregate(pts):
+    """레이더 점 리스트 → {range_m, az, v, n, snr, power} 중앙값 집계. 비면 None.
+
+    az 는 빔폭 noise(±15°)가 커 점 1개를 쓰면 정지 물체도 프레임마다 출렁이므로
+    median 으로 합쳐 noise 를 완화한다. 거리 게이트 없음 — 방위각으로 모인 점 그대로.
+    """
+    if not pts:
         return None
-
-    # 거리 게이트: 추적(직전 거리) 우선 → 없으면 DA3 초기화
-    if last_range is not None:
-        ref, gate = last_range, gate_track
-    elif bbox_dist is not None:
-        ref, gate = bbox_dist, gate_da3
-    else:
-        ref, gate = None, None
-    if ref is not None:
-        gated = [t for t in inside if abs(t["range_m"] - ref) <= gate]
-        if gated:
-            inside = gated
-        else:
-            # 이번 프레임 그 거리에 레이더 점 없음(정적물체는 매 프레임 일관 검출 안 됨).
-            # 마지막 레이더 실측(last_range/az)이 있으면 그걸 유지 — 정적물체는 안 움직임.
-            # 한 번도 레이더에 안 잡혔으면(last 없음) DA3 거리로 폴백.
-            if last_range is not None:
-                return {
-                    "range_m":      round(float(last_range), 3),
-                    "azimuth_deg":  round(float(last_az), 2) if last_az is not None
-                                    else round(sum(t["azimuth_deg"] for t in inside) / len(inside), 2),
-                    "velocity_mps": 0.0,
-                    "n_points":     0,
-                }
-            if bbox_dist is not None:
-                az_rep = sum(t["azimuth_deg"] for t in inside) / len(inside)
-                return {
-                    "range_m":      round(float(bbox_dist), 3),
-                    "azimuth_deg":  round(float(az_rep), 2),
-                    "velocity_mps": 0.0,
-                    "n_points":     0,
-                }
-
-    # 거리·방위각·속도 각각 중앙값 (점 1개 대표보다 robust).
-    # 특히 az 는 빔폭 noise(±15°)가 커서, 점 1개를 쓰면 정지 물체도 프레임마다
-    # ±18° 출렁였다. inside 점들의 median 으로 합쳐 noise 를 √n 완화한다.
-    med    = statistics.median(t["range_m"] for t in inside)
-    med_az = statistics.median(t["azimuth_deg"] for t in inside)
-    med_v  = statistics.median(t.get("velocity_mps", 0.0) for t in inside)
-    max_snr = max((t.get("snr", 0.0) for t in inside), default=0.0)
-    max_pow = max((t.get("power", 0.0) for t in inside), default=0.0)
+    med    = statistics.median(t["range_m"] for t in pts)
+    med_az = statistics.median(t["azimuth_deg"] for t in pts)
+    med_v  = statistics.median(t.get("velocity_mps", 0.0) for t in pts)
+    max_snr = max((t.get("snr", 0.0) for t in pts), default=0.0)
+    max_pow = max((t.get("power", 0.0) for t in pts), default=0.0)
     return {
         "range_m":      round(float(med), 3),
         "azimuth_deg":  round(float(med_az), 2),
         "velocity_mps": round(float(med_v), 3),
-        "n_points":     len(inside),
-        "snr":          round(float(max_snr), 2),    # inside 점들 중 최대 SNR(신뢰도)
-        "power":        round(float(max_pow), 1),     # 최대 반사 강도
+        "n_points":     len(pts),
+        "snr":          round(float(max_snr), 2),
+        "power":        round(float(max_pow), 1),
     }
+
+
+def match_one(targets, bbox, cam, mask=None):
+    """bbox/마스크 방위각 안의 레이더 점 median 거리 (거리 게이트 없음).
+
+    DA3 거리 게이트를 쓰지 않는다 — DA3 절대값은 스케일이 부정확해, 게이트로 쓰면
+    멀쩡한 레이더 점(예: 벽 근처 정적물체)을 엉뚱하게 끌어내렸다. 방위각으로 모인
+    점의 중앙값을 그대로 거리로 쓴다. 겹친 물체(같은 az) 분리는 match_all 이 담당.
+    반환 {range_m, azimuth_deg, velocity_mps, n_points, snr, power} 또는 None.
+    """
+    prof = _azimuth_profile(bbox, mask, cam)
+    inside = []
+    for t in targets:
+        sx = radar_to_x(t["range_m"], t["azimuth_deg"], cam)
+        if _in_profile(sx, prof):
+            inside.append(t)
+    return _aggregate(inside)
+
+
+def _split_by_gaps(pts, n):
+    """거리 오름차순 점 리스트를 거리 최대 갭 n-1 곳에서 n개 클러스터로 분할.
+
+    겹친 n개 물체에 점을 나눠 줄 때 사용 — 자연스러운 거리 간격(앞물체/뒷물체
+    사이 빈 공간)에서 끊는다. 점 수 < n 이면 가능한 만큼만(뒤 클러스터는 빔)."""
+    if n <= 1 or len(pts) <= 1:
+        return [pts]
+    gaps = sorted(((pts[i+1]["range_m"] - pts[i]["range_m"], i)
+                   for i in range(len(pts) - 1)), reverse=True)
+    cuts = sorted(i for _, i in gaps[:n-1])
+    clusters, start = [], 0
+    for c in cuts:
+        clusters.append(pts[start:c+1])
+        start = c + 1
+    clusters.append(pts[start:])
+    return clusters
+
+
+def match_all(targets, objs, cam):
+    """여러 객체 일괄 매칭 — 거리 게이트 없음 + 겹친 물체 DA3 깊이순 분리.
+
+    objs: [{"tid", "bbox", "mask"(optional), "da3"(optional)}].
+    반환 {tid: matchdict | None}.
+
+    1) 각 레이더 점을 방위각으로 매칭되는 객체(들)에 배정
+    2) 1개 객체만 매칭 → 그 객체 점
+    3) 여러 객체 겹침(같은 az) → 그 점들을 거리 클러스터로 나눠, 객체를 DA3
+       오름차순(앞→뒤)으로 정렬해 가까운 클러스터→앞 객체로 배정. DA3 절대값은
+       안 쓰고 '앞/뒤 순서'만 쓴다 — DA3 스케일이 틀려도 분리는 정확하다.
+    4) 객체별 배정 점 median → 거리
+    """
+    profs = [_azimuth_profile(o["bbox"], o.get("mask"), cam) for o in objs]
+    obj_pts = {i: [] for i in range(len(objs))}
+    overlap = {}   # frozenset(obj idx) -> [point]
+
+    for t in targets:
+        sx = radar_to_x(t["range_m"], t["azimuth_deg"], cam)
+        if sx is None:
+            continue
+        hit = [i for i, prof in enumerate(profs) if _in_profile(sx, prof)]
+        if len(hit) == 1:
+            obj_pts[hit[0]].append(t)
+        elif len(hit) > 1:
+            overlap.setdefault(frozenset(hit), []).append(t)
+
+    # 겹침 그룹: 거리 클러스터 ↔ DA3 깊이 순서 배정
+    for grp, pts in overlap.items():
+        grp_objs = sorted(grp, key=lambda i: (objs[i].get("da3")
+                                              if objs[i].get("da3") is not None else 1e9))
+        pts_sorted = sorted(pts, key=lambda t: t["range_m"])
+        clusters = _split_by_gaps(pts_sorted, len(grp_objs))
+        for ci, cl in enumerate(clusters):
+            obj_pts[grp_objs[min(ci, len(grp_objs) - 1)]].extend(cl)
+
+    return {objs[i]["tid"]: _aggregate(obj_pts[i]) for i in range(len(objs))}
 
 
 def match_targets_to_objects(targets, objects, cam):

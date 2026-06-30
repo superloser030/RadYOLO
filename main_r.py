@@ -260,7 +260,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     import time, cv2
     import numpy as np
     from ultralytics import YOLO
-    from src.objects.radar_fusion import load_latest_targets, match_one, depth_to_range, iou
+    from src.objects.radar_fusion import load_latest_targets, match_all, depth_to_range, iou
     from src.objects.obj_crop import load_sam2, crop_one, crop_one_extra, SKIP_CLASSES
     from src.objects.trellis_gen import generate_3d
     from src.background.depth import generate_depth
@@ -382,12 +382,11 @@ def live_update_loop(cam_cfg, enable_pose=True):
         finally:
             _da3_lock.release()
 
-    registry  = {}      # tid -> {cls,bbox,conf,miss,state,last_range,glb,appearance}
+    registry  = {}      # tid -> {cls,bbox,conf,miss,state,glb,appearance}
     graveyard = {}      # tid -> {…, evicted_at} — re-ID 대기 (TTL 내 재등록 시 같은 tid 재사용)
     _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
     _next_tid = [0]
     MISS_MAX, IOU_TH = 10, 0.15
-    RADAR_TRUST_N  = 3        # 이 개수 이상 레이더 점일 때만 last_range 갱신(drift 방지)
     GRAVEYARD_TTL  = 120.0   # 120초 후 graveyard 에서 영구 삭제
     MIN_VIEWS      = 3        # COLLECTING → MODELING 최소 뷰 수
     COLLECT_TIMEOUT = 30.0    # 30초 경과 시 보유 뷰로 강제 진입
@@ -474,14 +473,14 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     if db_match:
                         od = _restore_from_db(db_match, d["name"], tid)
                         registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
-                                         "miss": 0, "state": "READY", "last_range": None,
+                                         "miss": 0, "state": "READY",
                                          "glb": str(od / "model_trellis.glb"),
                                          "appearance": d["appearance"]}
                         _update_manifest()
                         print(f"[DB-ReID] {d['name']}_{tid} DB 복원 → READY 즉시 진입")
                     else:
                         registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
-                                         "miss": 0, "state": "NEW", "last_range": None, "glb": None,
+                                         "miss": 0, "state": "NEW", "glb": None,
                                          "appearance": d["appearance"]}
 
         # 미매칭 registry: miss++ → graveyard 이동 (re-ID 대기)
@@ -496,28 +495,27 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     print(f"[State] {entry['cls']}_{tid} → graveyard")
 
         # ── 3. 거리 매칭 + overlay + 상태 전이 ──
+        # match_all: 거리 게이트 없이 방위각 매칭 + 겹친 물체(같은 az)는 DA3 깊이순 분리.
+        # DA3(d["mdist"])는 절대 필터가 아니라 겹침 분리 순서로만 쓴다.
         det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
+        match_objs   = [{"tid": tid, "bbox": registry[tid]["bbox"],
+                         "mask": d["m_frame"], "da3": d.get("mdist")}
+                        for tid, d in det_by_tid.items() if tid in registry]
+        radar_by_tid = match_all(targets, match_objs, cam_cfg)
         fusion_lines = []; overlay = []
         for tid, r in list(registry.items()):
             d = det_by_tid.get(tid)
             if d is None:
                 continue   # 이번 프레임 미검출(miss 중)
             inst = f"{r['cls']}_{tid}"
-            radar = match_one(targets, r["bbox"], cam_cfg, bbox_dist=d["mdist"],
-                              last_range=r.get("last_range"), last_az=r.get("last_az"),
-                              mask=d["m_frame"])
-            da3 = d.get("mdist")   # 보정된 DA3 거리(m) — 레이더와 비교용
+            radar = radar_by_tid.get(tid)
+            da3 = d.get("mdist")   # DA3 거리(m) — 비교 표시 + 겹침분리용
             o = {"name": inst, "cls": r["cls"], "conf": round(r["conf"], 2),
                  "bbox": [round(v) for v in r["bbox"]], "state": r["state"]}
             if da3 is not None:
                 o["da3_m"] = round(float(da3), 2)
             da3_str = f"DA3 {da3:5.2f}m" if da3 is not None else "DA3  --  "
             if radar:
-                # 강한 레이더 실측(n>=RADAR_TRUST_N)일 때만 추적 기준 갱신
-                # — 약한 검출(n1~2)이 last_range 를 뒤로 끌고 가는 drift 방지
-                if radar.get("n_points", 0) >= RADAR_TRUST_N:
-                    r["last_range"] = radar["range_m"]
-                    r["last_az"]    = radar["azimuth_deg"]
                 o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
                 o["snr"] = radar.get("snr")
