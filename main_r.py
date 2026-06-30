@@ -382,7 +382,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
         finally:
             _da3_lock.release()
 
-    registry  = {}      # tid -> {cls,bbox,conf,miss,state,glb,appearance}
+    registry  = {}      # tid -> {cls,bbox,conf,miss,state,glb,appearance,ratio}
     graveyard = {}      # tid -> {…, evicted_at} — re-ID 대기 (TTL 내 재등록 시 같은 tid 재사용)
     _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
     _next_tid = [0]
@@ -504,16 +504,20 @@ def live_update_loop(cam_cfg, enable_pose=True):
                         for tid, d in det_by_tid.items() if tid in registry]
         radar_by_tid = match_all(targets, match_objs, cam_cfg)
 
-        # 레이더 잡힌 객체들의 R/DA3 비율 median → EMA 로 _da3_scale 갱신.
-        # metric DA3 는 절대스케일이 일정비율(~2.5×) 과소라, 레이더로 그 배율을 추정해
-        # 레이더 못 잡는 객체(miss)를 DA3×scale 로 대체한다.
-        ratios = [radar_by_tid[t]["range_m"] / det_by_tid[t]["mdist"]
-                  for t in radar_by_tid
-                  if radar_by_tid[t] and radar_by_tid[t]["n_points"] > 0
-                  and det_by_tid[t].get("mdist") and det_by_tid[t]["mdist"] > 0.05]
-        if ratios:
-            fs = float(np.median(ratios))
-            _da3_scale[0] = 0.7 * _da3_scale[0] + 0.3 * fs if _da3_scale[0] > 0 else fs
+        # 객체별 R/DA3 비율 EMA 갱신 (레이더 실측 n>0). metric DA3 는 비선형 압축이라
+        # 객체마다 비율이 다르므로(가까운 ~3, 먼 ~12) 객체별로 자기 비율을 기억한다.
+        for t in radar_by_tid:
+            rd = radar_by_tid[t]
+            d = det_by_tid[t].get("mdist")
+            if rd and rd["n_points"] > 0 and d and d > 0.05:
+                ratio = rd["range_m"] / d
+                old = registry[t].get("ratio") if t in registry else None
+                if t in registry:
+                    registry[t]["ratio"] = 0.7 * old + 0.3 * ratio if old else ratio
+        # 전역 평균 비율(한 번도 레이더에 안 잡힌 객체 fallback) — outlier robust median
+        all_ratios = [registry[t]["ratio"] for t in registry if registry[t].get("ratio")]
+        if all_ratios:
+            _da3_scale[0] = float(np.median(all_ratios))
 
         fusion_lines = []; overlay = []
         for tid, r in list(registry.items()):
@@ -535,12 +539,14 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 fusion_lines.append(f"[Fusion] {inst:14} R {radar['range_m']:5.2f}m | {da3_str} | "
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
                                     f"snr {radar.get('snr', 0):5.1f} | {r['state']}")
-            elif da3 is not None and _da3_scale[0] > 0:
-                # 레이더 미검출 → DA3×scale 추정치 (n=0, est)
-                est = da3 * _da3_scale[0]
+            elif da3 is not None and (r.get("ratio") or _da3_scale[0] > 0):
+                # 레이더 미검출 → DA3×비율 추정치. 자기 비율 우선(정지물체 안정),
+                # 한 번도 안 잡혔으면 전역 평균 비율 사용. (n=0, est)
+                ratio = r.get("ratio") or _da3_scale[0]
+                est = da3 * ratio
                 o["range_m"] = round(est, 2); o["n"] = 0; o["est"] = True
                 fusion_lines.append(f"[Fusion] {inst:14} R~{est:5.2f}m | {da3_str} | "
-                                    f"est(DA3×{_da3_scale[0]:.2f}) | {r['state']}")
+                                    f"est(DA3×{ratio:.2f}) | {r['state']}")
             else:
                 fusion_lines.append(f"[Fusion] {inst:14} miss      | {da3_str} | {r['state']}")
             overlay.append(o)
