@@ -754,7 +754,27 @@ def _start_viewer(port=8000):
 
 if __name__ == "__main__":
     import argparse
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog="main_r.py",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=(
+            "RadYOLO 수신 파이프라인 (AWR1642 레이더 + 웹캠 융합)\n"
+            "\n"
+            "기본 흐름(플래그 없음):\n"
+            "  1) data/ 아카이브 → 2) 레이더/웹캠 수신 → 3) 배경 선택(10s)\n"
+            "  4) ESRGAN 업스케일 → 5) DA3 depth → 6) depth 보정 → 7) YOLO 마스크\n"
+            "  8) 객체 크롭 → 9) Trellis 3D → 10) GigaPose 포즈 → 라이브 루프 + 뷰어\n"
+        ),
+        epilog=(
+            "예시:\n"
+            "  python main_r.py                  전체 파이프라인\n"
+            "  python main_r.py --skip-calib     depth 보정만 건너뜀 (metric DA3 시험)\n"
+            "  python main_r.py --skip-3d        3D/포즈 없이 거리 융합만\n"
+            "  python main_r.py --verify         경량 검증(수신+박스+뷰어)\n"
+            "  python main_r.py --calib          레이더↔카메라 외부 캘리브\n"
+            "  python main_r.py --viewer-only    뷰어 서버만\n"
+        ),
+    )
     parser.add_argument("--skip-bg",    action="store_true", help="배경 촬영 건너뜀 (background_raw.jpg 이미 있을 때)")
     parser.add_argument("--skip-depth", action="store_true", help="DA3 건너뜀 (depth.png 이미 있을 때)")
     parser.add_argument("--skip-3d",    action="store_true", help="Trellis 3D 모델 생성 건너뜀")
