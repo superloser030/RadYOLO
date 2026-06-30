@@ -15,6 +15,7 @@ RENDER_SCRIPT = PROJECT_ROOT / "tools" / "gigapose" / "prepare_templates.py"
 
 _server       = None           # 단일 추론 서버 {"proc", "lock"} — 모델 1번만 로드
 _server_lock  = threading.Lock()
+_server_retry_at = 0.0        # 서버 재시작 가능 시각 (실패 시 60초 쿨다운)
 
 
 # ── 템플릿 렌더링 ────────────────────────────────────────────────────
@@ -34,10 +35,14 @@ def prepare_templates(mesh_path: str, template_dir: str, level: int = 1):
 
 def _get_server(camera_k):
     """단일 추론 서버 시작/재사용. 모델은 1번만 로드, 템플릿은 서버가 요청별 캐시."""
-    global _server
+    import time
+    global _server, _server_retry_at
     with _server_lock:
         if _server and _server["proc"].poll() is None:
             return _server         # 살아있는 서버 재사용 (객체 수 무관)
+
+        if time.time() < _server_retry_at:
+            return None            # 60초 쿨다운 중 — 재시작 시도 안 함
 
         k_str = ",".join(map(str, map(float, camera_k)))
         cmd   = [GIGAPOSE_PY, str(SERVER_SCRIPT), "--camera-k", k_str]
@@ -54,8 +59,9 @@ def _get_server(camera_k):
             else:
                 raise ValueError(ready_line)
         except Exception as e:
-            print(f"[Pose] 서버 시작 실패: {e}")
+            print(f"[Pose] 서버 시작 실패: {e}  (60초 쿨다운)")
             proc.kill()
+            _server_retry_at = time.time() + 60
             return None
 
         _server = {"proc": proc, "lock": threading.Lock()}

@@ -91,6 +91,56 @@ def estimate_object_poses():
     print(f"[Pose] manifest.json 저장 ({len(manifest)}개 객체)")
 
 
+def _appearance(frame, bbox, m_frame):
+    """HSV 64-bin 색 히스토그램 — re-ID 외형 특징. 마스크 영역만 사용(없으면 bbox 전체)."""
+    x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
+    crop = frame[max(0, y1):max(1, y2), max(0, x1):max(1, x2)]
+    if crop.size == 0:
+        return None
+    mask8 = None
+    if m_frame is not None:
+        mc = m_frame[max(0, y1):max(1, y2), max(0, x1):max(1, x2)]
+        mask8 = (mc > 0.5).astype(np.uint8) * 255
+        if mask8.shape[:2] != crop.shape[:2]:
+            mask8 = cv2.resize(mask8, (crop.shape[1], crop.shape[0]))
+    hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    h = cv2.calcHist([hsv], [0, 1], mask8, [16, 4], [0, 180, 0, 256])
+    cv2.normalize(h, h)
+    return h
+
+
+def _try_reid(graveyard, cls, bbox, appearance, now,
+              graveyard_ttl=120.0, hist_th=0.60):
+    """graveyard 에서 cls·위치·외형 매칭 → (tid, entry) or None.
+
+    위치: 중심거리 < bbox 폭 × 1.5.  외형: HSV 히스토그램 상관계수 ≥ hist_th.
+    점수 = 위치 40% + 외형 60% — 가중 합산 최고점 선택.
+    """
+    bw  = max(1.0, bbox[2] - bbox[0])
+    cx  = (bbox[0] + bbox[2]) / 2
+    cy  = (bbox[1] + bbox[3]) / 2
+    best_tid, best_score, best_entry = None, -1.0, None
+    for tid, g in graveyard.items():
+        if g["cls"] != cls or now - g["evicted_at"] > graveyard_ttl:
+            continue
+        gcx = (g["bbox"][0] + g["bbox"][2]) / 2
+        gcy = (g["bbox"][1] + g["bbox"][3]) / 2
+        dist_norm = ((cx - gcx) ** 2 + (cy - gcy) ** 2) ** 0.5 / bw
+        if dist_norm > 1.5:
+            continue
+        pos_score  = max(0.0, 1.0 - dist_norm / 1.5)
+        hist_score = 0.5   # 외형 특징 없을 때 중립값
+        if appearance is not None and g.get("appearance") is not None:
+            hist_score = max(0.0, float(cv2.compareHist(
+                appearance, g["appearance"], cv2.HISTCMP_CORREL)))
+        if hist_score < hist_th:
+            continue
+        score = pos_score * 0.4 + hist_score * 0.6
+        if score > best_score:
+            best_score, best_tid, best_entry = score, tid, g
+    return (best_tid, best_entry) if best_tid is not None else None
+
+
 def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
     """백그라운드 스레드: GigaPose 추론 → pose.json 갱신 (회전/깊이)."""
     from src.objects.pose_estimator import estimate_pose
@@ -221,10 +271,12 @@ def live_update_loop(cam_cfg, enable_pose=True):
         finally:
             _da3_lock.release()
 
-    registry  = {}      # tid -> {cls,bbox,conf,miss,state,last_range,glb}
+    registry  = {}      # tid -> {cls,bbox,conf,miss,state,last_range,glb,appearance}
+    graveyard = {}      # tid -> {…, evicted_at} — re-ID 대기 (TTL 내 재등록 시 같은 tid 재사용)
     _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
     _next_tid = [0]
-    MISS_MAX, IOU_TH = 5, 0.15
+    MISS_MAX, IOU_TH = 10, 0.15
+    GRAVEYARD_TTL = 120.0   # 120초 후 graveyard 에서 영구 삭제
     _last_fusion = 0.0
 
     while not receiver.shutdown_event.is_set():
@@ -236,7 +288,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
         fh, fw = frame.shape[:2]
         sx = cam_w / fw
         sy = cam_h / fh
-        frame_ts = receiver.get_latest_frame_ts()
+        frame_ts = receiver.get_latest_frame_ts() or None
         targets  = load_latest_targets(TARGETS_PATH, frame_ts)
 
         results = yolo(frame, verbose=False, conf=detect_conf)
@@ -263,6 +315,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     m_frame = m
             dets.append({"name": name, "conf": conf, "bbox": mbbox, "m_frame": m_frame,
                          "mdist": _mask_dist(m_frame, cx, cy),
+                         "appearance": _appearance(frame, mbbox, m_frame),
                          "cx": (mbbox[0]+mbbox[2])/2, "cy": (mbbox[1]+mbbox[3])/2, "tid": None})
 
         # ── 2. IoU+중심 매칭 → registry 갱신/등록 (re-ID 는 2단계) ──
@@ -283,19 +336,39 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 d["tid"] = best_tid; matched.add(best_tid)
                 r = registry[best_tid]
                 r["bbox"] = d["bbox"]; r["conf"] = max(r["conf"], d["conf"]); r["miss"] = 0
+                r["appearance"] = d["appearance"]
             elif d["conf"] >= obj_conf:   # 새 객체는 obj_conf 통과 시만 등록
-                tid = _next_tid[0]; _next_tid[0] += 1
-                d["tid"] = tid; matched.add(tid)
-                registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
-                                 "miss": 0, "state": "NEW", "last_range": None, "glb": None}
+                reid = _try_reid(graveyard, d["name"], d["bbox"], d["appearance"],
+                                 time.time(), GRAVEYARD_TTL)
+                if reid:
+                    rtid, rentry = reid
+                    del graveyard[rtid]
+                    st = rentry.get("state", "NEW")
+                    if st == "MODELING":
+                        st = "NEW"   # MODELING 스레드는 이미 종료됨
+                    d["tid"] = rtid; matched.add(rtid)
+                    registry[rtid] = {**rentry, "bbox": d["bbox"], "conf": d["conf"],
+                                      "miss": 0, "state": st, "appearance": d["appearance"]}
+                    registry[rtid].pop("evicted_at", None)
+                    print(f"[ReID] {d['name']}_{rtid} graveyard→재등록 "
+                          f"(state={st}, glb={'있음' if rentry.get('glb') else '없음'})")
+                else:
+                    tid = _next_tid[0]; _next_tid[0] += 1
+                    d["tid"] = tid; matched.add(tid)
+                    registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
+                                     "miss": 0, "state": "NEW", "last_range": None, "glb": None,
+                                     "appearance": d["appearance"]}
 
-        # 미매칭 registry: miss++ → 제거 (2단계엔 graveyard 이동)
+        # 미매칭 registry: miss++ → graveyard 이동 (re-ID 대기)
         for tid in list(registry):
             if tid not in matched:
                 registry[tid]["miss"] += 1
                 if registry[tid]["miss"] > MISS_MAX:
-                    registry.pop(tid, None)
+                    entry = registry.pop(tid)
+                    entry["evicted_at"] = time.time()
+                    graveyard[tid] = entry
                     _busy.pop(tid, None); _busy.pop(f"pose{tid}", None)
+                    print(f"[State] {entry['cls']}_{tid} → graveyard")
 
         # ── 3. 거리 매칭 + overlay + 상태 전이 ──
         det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
@@ -348,7 +421,9 @@ def live_update_loop(cam_cfg, enable_pose=True):
                         _busy[tid] = False
                 threading.Thread(target=_model_bg, daemon=True).start()
             # READY → GigaPose pose (백그라운드)
-            elif r["state"] == "READY" and not _busy.get(f"pose{tid}"):
+            elif (r["state"] == "READY"
+                  and not _busy.get(f"pose{tid}")
+                  and time.time() >= r.get("pose_retry_at", 0)):
                 od = OBJECTS_DIR / f"{r['cls']}_{tid}"
                 if (od / "model_trellis.glb").exists():
                     _busy[f"pose{tid}"] = True
@@ -360,6 +435,10 @@ def live_update_loop(cam_cfg, enable_pose=True):
                             from src.objects.pose_estimator import prepare_templates
                             prepare_templates(str(od / "model_trellis.glb"), str(od / "templates"))
                             _run_pose_bg(od, fp, bb, cam_cfg)
+                        except Exception as e:
+                            print(f"[Pose] {tid} 실패, 30초 쿨다운: {e}")
+                            if tid in registry:
+                                registry[tid]["pose_retry_at"] = time.time() + 30
                         finally:
                             _busy[f"pose{tid}"] = False
                     threading.Thread(target=_pose_bg, daemon=True).start()
@@ -368,10 +447,14 @@ def live_update_loop(cam_cfg, enable_pose=True):
 
         now = time.time()
         if now - _last_fusion >= 1.0:
-            print(f"--- radar targets: {len(targets)} | registry {len(registry)} ---")
+            print(f"--- radar targets: {len(targets)} | registry {len(registry)} | graveyard {len(graveyard)} ---")
             for ln in fusion_lines:
                 print(ln)
             _last_fusion = now
+
+        # graveyard TTL 정리
+        for _tid in [k for k, v in graveyard.items() if now - v["evicted_at"] > GRAVEYARD_TTL]:
+            del graveyard[_tid]
 
         time.sleep(0.3)
 

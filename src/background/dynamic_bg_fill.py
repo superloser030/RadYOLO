@@ -1,5 +1,7 @@
 # 동적 배경 채우기: 객체가 비켜나 드러난 영역(480p)으로 배경 구멍을 메우고,
 # 진행 단계마다 ESRGAN 으로 업스케일해 background.jpg 갱신. 설정은 receiver.toml [dynamic_bg].
+import json
+import threading
 import time
 import shutil
 from pathlib import Path
@@ -42,6 +44,37 @@ def _esrgan(src: Path, dst: Path):
             shutil.copy(COMFYUI_OUTPUT / node_out["images"][0]["filename"], dst)
             return
     raise RuntimeError("ESRGAN 결과 없음")
+
+
+_depth_lock = threading.Lock()   # DynBG DA3 재추론 직렬화 (concurrent 방지)
+
+
+def _rerun_depth(bg_path: Path):
+    """background.jpg 갱신 후 DA3 재추론 + 보정계수 재적용 → depth.png.
+    비동기(daemon thread) — DynBG 루프 블로킹 없이 뷰어 포인트클라우드 갱신 신호 제공."""
+    if not _depth_lock.acquire(blocking=False):
+        return   # 이미 재추론 중 → 최신 배경으로 곧 덮어써질 것이므로 스킵
+    def _work():
+        try:
+            from src.background.depth import generate_depth
+            from src.background.depth_calibration import apply_calib
+            generate_depth(input_path=str(bg_path))
+            calib_p = SCENE / "depth_calib.json"
+            if calib_p.exists():
+                cal = json.loads(calib_p.read_text())
+                d = cv2.imread(str(SCENE / "depth.png"), cv2.IMREAD_GRAYSCALE)
+                if d is not None:
+                    if d.ndim != 2:
+                        d = d[:, :, 0]
+                    cn = apply_calib(d.astype(np.float32) / 255.0, cal)
+                    cv2.imwrite(str(SCENE / "depth.png"), (cn * 255).astype(np.uint8))
+            (SCENE / "bg_ts.txt").write_text(str(time.time()))   # 뷰어 재빌드 신호
+            print("[DynBG] depth.png 갱신 완료 → 뷰어 포인트클라우드 재빌드 신호")
+        except Exception as e:
+            print(f"[DynBG] depth 재추론 실패: {e}")
+        finally:
+            _depth_lock.release()
+    threading.Thread(target=_work, daemon=True).start()
 
 
 def _upscale(src: Path, dst: Path, use_esrgan: bool):
@@ -149,12 +182,14 @@ def main():
                     step = steps[min(up_idx, len(steps) - 1)]
                     if last_up_remaining - cur >= step * last_up_remaining:
                         _upscale(FILLED_PATH, OUT_BG, use_esrgan)
+                        _rerun_depth(OUT_BG)
                         up_idx += 1
                         last_up_remaining = cur
 
             if int((remaining > 0).sum()) == 0:
                 print("[DynBG] 가려진 영역 모두 채움 — 최종 업스케일")
                 _upscale(FILLED_PATH, OUT_BG, use_esrgan)
+                _rerun_depth(OUT_BG)
                 break
 
             time.sleep(poll)   # 새 프레임 대기 (영원히 — Ctrl+C 또는 완료까지)
@@ -163,6 +198,7 @@ def main():
         print(f"\n[DynBG] 종료 — {sel}프레임 선정, 최종 업스케일")
         if FILLED_PATH.exists():
             _upscale(FILLED_PATH, OUT_BG, use_esrgan)
+            _rerun_depth(OUT_BG)
 
 
 if __name__ == "__main__":

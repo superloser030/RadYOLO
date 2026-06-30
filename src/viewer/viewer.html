@@ -95,6 +95,8 @@ const W_REF = 1920, H_REF = 1080;
 
 // 3D 핸들 (build3D 에서 채움 — 콘솔 set 명령이 참조)
 let renderer, scene, camera, controls, pointsMat = null;
+let bgPoints = null, bgGeo = null;    // 배경 포인트클라우드 (pollBgUpdate 에서 갱신)
+let bgTsCache = '', _bgCamCfg = null; // DynBG 재빌드용 상태
 let _calib = null;
 
 // ════════════════════════════════════════════════════════════════════
@@ -188,6 +190,27 @@ function poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy) {
   return { vx, vy, vz, Rv, tz };
 }
 
+const MAX_TILT_DEG = 45;   // pitch/roll 최대 기울기 (yaw 는 무제한)
+
+function clampTilt(Rv) {
+  const mat = new THREE.Matrix4().set(
+    Rv[0][0], Rv[0][1], Rv[0][2], 0,
+    Rv[1][0], Rv[1][1], Rv[1][2], 0,
+    Rv[2][0], Rv[2][1], Rv[2][2], 0,
+    0, 0, 0, 1);
+  const euler = new THREE.Euler().setFromRotationMatrix(mat, 'YXZ');
+  const maxRad = MAX_TILT_DEG * Math.PI / 180;
+  euler.x = Math.max(-maxRad, Math.min(maxRad, euler.x));
+  euler.z = Math.max(-maxRad, Math.min(maxRad, euler.z));
+  const newMat = new THREE.Matrix4().makeRotationFromEuler(euler);
+  const e = newMat.elements;  // column-major
+  return [
+    [e[0], e[4], e[8]],
+    [e[1], e[5], e[9]],
+    [e[2], e[6], e[10]],
+  ];
+}
+
 async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
   const manifest = await fetch('/data/objects/manifest.json')
     .then(r => r.ok ? r.json() : []).catch(() => []);
@@ -221,13 +244,14 @@ async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
       let { vx, vy, vz, Rv, tz } = state;
       group.position.set(vx, vy, vz);
       group.scale.setScalar(1.0 / tz);
-      applyRv(group, Rv);
+      applyRv(group, clampTilt(Rv));
       async function pollPos() {
         if (mode === '3d') try {
           const live = await fetch(`/data/objects/${obj.dir}/live.json?_=${Date.now()}`).then(r => r.json());
           if (typeof live.bbox_cx === 'number') {
-            const nvx = (live.bbox_cx - cx) / fx;
-            const nvy = -(live.bbox_cy - cy) / fy;
+            const d = -vz;   // vz 음수(씬 안쪽) → d 양수 미터
+            const nvx = (live.bbox_cx - cx) / fx * d;
+            const nvy = -(live.bbox_cy - cy) / fy * d;
             group.position.set(nvx, nvy, vz);
           }
         } catch (_) {}
@@ -237,13 +261,37 @@ async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
         if (mode === '3d') try {
           const p2 = await fetch(`/data/objects/${obj.dir}/pose.json?_=${Date.now()}`).then(r => r.json());
           const s2 = poseToViewerState(p2, depthImg, W, H, fx, fy, cx, cy);
-          if (s2) { ({ vz, Rv, tz } = s2); group.scale.setScalar(1.0 / tz); applyRv(group, Rv); }
+          if (s2) { ({ vz, Rv, tz } = s2); group.scale.setScalar(1.0 / tz); applyRv(group, clampTilt(Rv)); }
         } catch (_) {}
         setTimeout(pollRot, 1000);
       }
       pollPos(); pollRot();
     }, undefined, (err) => console.warn(`[Viewer] ${obj.dir} GLB 로드 실패:`, err));
   }
+}
+
+function _buildPointsGeo(color, depth, maskImg, W, H, fx, fy, cx, cy) {
+  const STEP = 2;
+  const cols = Math.floor(W / STEP), rows = Math.floor(H / STEP);
+  const positions = new Float32Array(cols * rows * 3);
+  const colors    = new Float32Array(cols * rows * 3);
+  let count = 0;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const px = c * STEP, py = r * STEP, pi = (py * W + px) * 4;
+    if (maskImg && maskImg.data.data[pi] > 128) continue;
+    const dc = depthToCam(depth.data.data[pi] / 255);
+    positions[count*3]   = (px - cx) / fx * dc;
+    positions[count*3+1] = -(py - cy) / fy * dc;
+    positions[count*3+2] = -dc;
+    colors[count*3]   = color.data.data[pi]   / 255;
+    colors[count*3+1] = color.data.data[pi+1] / 255;
+    colors[count*3+2] = color.data.data[pi+2] / 255;
+    count++;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, count*3), 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors.slice(0, count*3), 3));
+  return geo;
 }
 
 async function build3D() {
@@ -291,31 +339,43 @@ async function build3D() {
   const [color, depth, maskImg] = await Promise.all(loads);
 
   camera.fov = camCfg.vfov_deg; camera.updateProjectionMatrix();
-  const W = color.w, H = color.h, STEP = 2;
+  const W = color.w, H = color.h;
   const fx = camCfg.fx, fy = camCfg.fy, cx = camCfg.cx, cy = camCfg.cy;
-  const cols = Math.floor(W / STEP), rows = Math.floor(H / STEP);
-  const positions = new Float32Array(cols * rows * 3);
-  const colors    = new Float32Array(cols * rows * 3);
-  let count = 0;
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const px = c * STEP, py = r * STEP, pi = (py * W + px) * 4;
-    if (maskImg && maskImg.data.data[pi] > 128) continue;
-    const dc = depthToCam(depth.data.data[pi] / 255);
-    positions[count*3]   = (px - cx) / fx * dc;
-    positions[count*3+1] = -(py - cy) / fy * dc;
-    positions[count*3+2] = -dc;
-    colors[count*3]   = color.data.data[pi]   / 255;
-    colors[count*3+1] = color.data.data[pi+1] / 255;
-    colors[count*3+2] = color.data.data[pi+2] / 255;
-    count++;
-  }
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, count*3), 3));
-  geo.setAttribute('color',    new THREE.BufferAttribute(colors.slice(0, count*3), 3));
+  _bgCamCfg = { W, H, fx, fy, cx, cy };
+  bgGeo = _buildPointsGeo(color, depth, maskImg, W, H, fx, fy, cx, cy);
   pointsMat = new THREE.PointsMaterial({ vertexColors: true, size: 0.003, sizeAttenuation: true });
-  scene.add(new THREE.Points(geo, pointsMat));
+  bgPoints = new THREE.Points(bgGeo, pointsMat);
+  scene.add(bgPoints);
 
   await loadObjects(depth, W, H, fx, fy, cx, cy);
+}
+
+async function pollBgUpdate() {
+  if (!bgGeo || !scene) return;
+  try {
+    const ts = await fetch('/data/scene/bg_ts.txt?_=' + Date.now())
+      .then(r => r.ok ? r.text().then(t => t.trim()) : '').catch(() => '');
+    if (!ts || ts === bgTsCache) return;
+    bgTsCache = ts;
+    // depth_calib 재로드 (DynBG가 재보정 후 파일 갱신했을 수 있음)
+    _calib = await fetch('/data/scene/depth_calib.json?_=' + Date.now())
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+    const [color, depth] = await Promise.all([
+      getImageData('/data/scene/background.jpg?_=' + Date.now()),
+      getImageData('/data/scene/depth.png?_=' + Date.now()),
+    ]);
+    const { W, H, fx, fy, cx, cy } = _bgCamCfg;
+    // 갱신 시점엔 마스크 없이 (드러난 배경 픽셀이 마스크 영역과 겹칠 수 있음)
+    const newGeo = _buildPointsGeo(color, depth, null, W, H, fx, fy, cx, cy);
+    scene.remove(bgPoints);
+    bgGeo.dispose();
+    bgGeo = newGeo;
+    bgPoints = new THREE.Points(bgGeo, pointsMat);
+    scene.add(bgPoints);
+    console.log('[Viewer] 배경 포인트클라우드 재빌드 (bg_ts=' + ts + ')');
+  } catch (e) {
+    console.warn('[Viewer] 배경 갱신 실패:', e);
+  }
 }
 
 function animate3D() {
@@ -343,7 +403,7 @@ async function setMode(m) {
   if (m === '3d' && !built3d) {
     const loading = document.getElementById('loading');
     loading.style.display = 'flex'; loading.textContent = '3D 로딩 중...';
-    try { await build3D(); built3d = true; animate3D(); }
+    try { await build3D(); built3d = true; animate3D(); setInterval(() => { if (mode === '3d') pollBgUpdate(); }, 15000); }
     catch (e) { conPrint('3D 로드 실패: ' + e.message, 'err'); }
     loading.style.display = 'none';
   }

@@ -18,6 +18,7 @@ cam_w(=1920) 로 스케일되어 저장되므로 좌표계가 일치한다.
 import json
 import math
 import statistics
+import time as _time
 from pathlib import Path
 
 NEGATE_AZIMUTH = False   # 좌우 반대로 매칭되면 True 로
@@ -61,34 +62,49 @@ def radar_to_x(range_m: float, azimuth_deg: float, cam: dict):
     return cam["cx"] + cam["fx"] * xc / zc
 
 
-_last_targets = []   # 읽기 실패(쓰는 중/잠김) 시 직전 값 유지
+_last_nonempty: list = []       # 마지막으로 검출 > 0 이었던 targets
+_last_nonempty_at: float = 0.0  # 그 wall-clock 시각
+CFAR_FALLBACK_TTL = 30.0        # 정적물체 도플러 억압 대응: 30초간 마지막 거리 유지
 
 
 def load_latest_targets(path, ts_ms=None, tol_ms=3000):
     """targets.json 에서 ts 에 가장 가까운 프레임의 targets 반환.
 
     ts_ms=None → 최신 프레임. ts 차이가 tol_ms 초과면 [] (동기 실패).
-    파일이 없거나 쓰는 중(파싱 실패)이면 직전 값 유지 (깜빡임 방지).
+    파일이 없거나 쓰는 중(파싱 실패)이면 직전 비어있지 않은 값 유지 (깜빡임 방지).
+    CFAR 검출 0 → CFAR_FALLBACK_TTL(30초) 내 마지막 검출 폴백 (정적물체 도플러 억압 대응).
     targets.json: [{frame_idx, ts_ms, targets:[{range_m, velocity_mps, azimuth_deg}]}]
     """
-    global _last_targets
+    global _last_nonempty, _last_nonempty_at
     p = Path(path)
     if not p.exists():
-        return _last_targets
+        return _last_nonempty
     try:
         data = json.loads(p.read_text())
     except (ValueError, OSError):
-        return _last_targets   # movefile 직전/쓰는 중 → 직전 유지
+        return _last_nonempty   # movefile 직전/쓰는 중 → 직전 유지
     if not data:
-        return _last_targets
+        return _last_nonempty
     if ts_ms is None:
-        _last_targets = data[-1].get("targets", [])
-        return _last_targets
+        targets = data[-1].get("targets", [])
+        if targets:
+            _last_nonempty = targets
+            _last_nonempty_at = _time.time()
+        return targets
     best = min(data, key=lambda f: abs(f.get("ts_ms", 0) - ts_ms))
-    if abs(best.get("ts_ms", 0) - ts_ms) > tol_ms:
-        return []   # 동기 실패(오래된 데이터)는 빈 값 — 직전 유지 안 함
-    _last_targets = best.get("targets", [])
-    return _last_targets
+    best_ts = best.get("ts_ms", 0)
+    if best_ts > 0 and abs(best_ts - ts_ms) > tol_ms:
+        return []   # 동기 실패(오래된 데이터) — 폴백 없이 빈 값
+    # best_ts==0 → MATLAB이 CSV 타임스탬프 못 읽은 프레임 → 체크 스킵
+    targets = best.get("targets", [])
+    if targets:
+        _last_nonempty = targets
+        _last_nonempty_at = _time.time()
+        return targets
+    # CFAR 진짜 0 (정적물체 도플러 억압 등) → TTL 내 마지막 검출 폴백
+    if _last_nonempty and (_time.time() - _last_nonempty_at) < CFAR_FALLBACK_TTL:
+        return _last_nonempty
+    return []
 
 
 def depth_to_range(d_norm: float, calib: dict):
