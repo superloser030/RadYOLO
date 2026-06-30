@@ -216,12 +216,14 @@ const MAX_TILT_DEG   = 45;    // pitch/roll 최대 기울기 (yaw 는 무제한)
 const POSE_SCORE_MIN = 0.30;  // gigapose pose score 가 이 미만이면 회전 갱신 무시(엉뚱한 자세 차단)
 
 // 객체 3D 위치 — bbox 중심 + 융합 거리(range_m, 레이더/DA3). 배경 depth 대신 실제 객체거리.
+// scale 은 bbox 높이×거리로 실제 크기(m) 추정 — 거리로 나누지 않음(원근은 카메라가 처리).
 function posFromOverlay(o, fx, fy, cx, cy) {
   if (o == null || o.range_m == null || !o.bbox) return null;
   const bx = (o.bbox[0] + o.bbox[2]) / 2;
   const by = (o.bbox[1] + o.bbox[3]) / 2;
   const d  = o.range_m;
-  return { vx: (bx - cx) / fx * d, vy: -(by - cy) / fy * d, vz: -d };
+  const realH = Math.max(0.05, (o.bbox[3] - o.bbox[1]) / fy * d);  // 실제 높이(m)
+  return { vx: (bx - cx) / fx * d, vy: -(by - cy) / fy * d, vz: -d, scale: realH };
 }
 
 function clampTilt(Rv) {
@@ -279,7 +281,7 @@ function _loadOneObject(obj, depthImg, W, H, fx, fy, cx, cy) {
           const ov = await fetch(`/data/scene/live_overlay.json?_=${Date.now()}`).then(r => r.json());
           const o  = ov.find(x => x.name === obj.dir);
           const p  = posFromOverlay(o, fx, fy, cx, cy);
-          if (p) { vz = p.vz; group.position.set(p.vx, p.vy, p.vz); group.scale.setScalar(1.0 / (-p.vz)); }
+          if (p) { vz = p.vz; group.position.set(p.vx, p.vy, p.vz); group.scale.setScalar(p.scale); }
         } catch (_) {}
         setTimeout(pollPos, 200);
       }
