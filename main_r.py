@@ -356,14 +356,17 @@ def live_update_loop(cam_cfg, enable_pose=True):
             cv2.imwrite(str(raw), frame_raw)
             upscale_image(input_path=str(raw), output_path=str(up))   # ESRGAN (배경과 동일)
             generate_depth(input_path=str(up))
-            cal = _depth_calib[0]
-            if cal is not None:
-                d = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
-                if d is not None:
-                    if d.ndim != 2:
-                        d = d[:, :, 0]
-                    cn = apply_calib(d.astype(np.float32) / 255.0, cal)
-                    cv2.imwrite(str(DEPTH_PATH), (cn * 255).astype(np.uint8))
+            # metric(Raw) 모드면 generate_depth 가 시각화 depth.png 를 이미 만들었고
+            # 거리는 .npy 라 log calib 불필요 → 스킵. 아니면 기존 log_linear 보정.
+            if not METRIC_PATH.exists():
+                cal = _depth_calib[0]
+                if cal is not None:
+                    d = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
+                    if d is not None:
+                        if d.ndim != 2:
+                            d = d[:, :, 0]
+                        cn = apply_calib(d.astype(np.float32) / 255.0, cal)
+                        cv2.imwrite(str(DEPTH_PATH), (cn * 255).astype(np.uint8))
             _reload_depth()
             print("[State] DA3 재추론 → depth 갱신")
         except Exception as e:

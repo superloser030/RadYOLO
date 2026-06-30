@@ -181,6 +181,10 @@ function getImageData(url) {
 
 function depthToCam(d) {
   if (_calib && _calib.model === 'log_linear') return Math.exp(_calib.a * d + _calib.b);
+  // metric(Raw) 모드: depth.png 는 near=bright 정규화(vis=1-(m-min)/(max-min)).
+  // d(0~1, 1=가까움) → 미터 = min + (1-d)*(max-min)
+  if (_calib && _calib.model === 'metric_linear')
+    return _calib.range_min_m + (1.0 - d) * (_calib.range_max_m - _calib.range_min_m);
   return 0.05 + (1.0 - d) * 1.2;     // 보정 없을 때 fallback
 }
 
