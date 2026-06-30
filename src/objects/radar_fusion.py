@@ -64,7 +64,7 @@ def radar_to_x(range_m: float, azimuth_deg: float, cam: dict):
 
 _last_nonempty: list = []       # 마지막으로 검출 > 0 이었던 targets
 _last_nonempty_at: float = 0.0  # 그 wall-clock 시각
-CFAR_FALLBACK_TTL = 30.0        # 정적물체 도플러 억압 대응: 30초간 마지막 거리 유지
+CFAR_FALLBACK_TTL = float("inf")  # 정적물체 도플러 억압 대응: 마지막 검출 무기한 유지
 
 
 def load_latest_targets(path, ts_ms=None, tol_ms=3000):
