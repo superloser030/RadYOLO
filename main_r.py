@@ -297,7 +297,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _da3_lock  = threading.Lock()
     _da3_last  = [0.0]
 
-    ERODE_FRAC = 0.15
+    ERODE_FRAC = 0.50
 
     def _erode_vals(arr, m_frame):
         h, w = arr.shape[:2]
@@ -308,10 +308,11 @@ def live_update_loop(cam_cfg, enable_pose=True):
             return arr[mmb > 0]
         side = min(xs.max() - xs.min() + 1, ys.max() - ys.min() + 1)
         er_px = max(1, int(side * ERODE_FRAC))
-        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * er_px + 1, 2 * er_px + 1))
-        er = cv2.erode(mmb, k)
-        sel = er if er.any() else mmb
-        return arr[sel > 0]
+        dist = cv2.distanceTransform(mmb, cv2.DIST_L2, 3)
+        sel = dist >= er_px
+        if not sel.any():
+            sel = mmb > 0
+        return arr[sel]
 
     def _mask_dist(m_frame, cx, cy):
         met = _depth_metric[0]
@@ -372,6 +373,11 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _da3_scale   = [3.0]
     _prev_da3_ts = [0.0]
     SNR_MIN      = 4.0
+    RATIO_TRUST_N = 5      # 이만큼 누적 학습돼야 자기 ratio 신뢰(미만은 전역 평균)
+    RATIO_OUTLIER = 2.0    # 기존/전역 대비 ×2 또는 ÷2 밖이면 outlier 로 거부
+
+    def _obj_scale(r):
+        return r["ratio"] if r.get("ratio_n", 0) >= RATIO_TRUST_N else _da3_scale[0]
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -489,7 +495,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
             if tid not in registry:
                 continue
             da3 = registry[tid].get("da3_0")
-            exp = da3 * (registry[tid].get("ratio") or _da3_scale[0]) if da3 else None
+            exp = da3 * _obj_scale(registry[tid]) if da3 else None
             match_objs.append({"tid": tid, "bbox": registry[tid]["bbox"],
                                "mask": d["m_frame"], "da3": da3, "expected": exp})
         radar_by_tid = match_all(targets, match_objs, cam_cfg)
@@ -498,12 +504,16 @@ def live_update_loop(cam_cfg, enable_pose=True):
             rd = radar_by_tid[t]
             da3_0 = registry[t].get("da3_0") if t in registry else None
             if rd and rd["n_points"] > 0 and rd.get("snr", 0) >= SNR_MIN and da3_0 and da3_0 > 0.05:
-                ratio = rd["range_m"] / da3_0
-                old = registry[t].get("ratio")
-                registry[t]["ratio"] = 0.7 * old + 0.3 * ratio if old else ratio
-        all_ratios = [registry[t]["ratio"] for t in registry if registry[t].get("ratio")]
-        if all_ratios:
-            _da3_scale[0] = float(np.median(all_ratios))
+                new = rd["range_m"] / da3_0
+                ref = registry[t].get("ratio") or _da3_scale[0]
+                if ref / RATIO_OUTLIER <= new <= ref * RATIO_OUTLIER:   # 기존값과 비슷할 때만 인정
+                    old = registry[t].get("ratio")
+                    registry[t]["ratio"]   = 0.7 * old + 0.3 * new if old else new
+                    registry[t]["ratio_n"] = registry[t].get("ratio_n", 0) + 1
+        trusted = [registry[t]["ratio"] for t in registry
+                   if registry[t].get("ratio_n", 0) >= RATIO_TRUST_N]
+        if trusted:
+            _da3_scale[0] = float(np.median(trusted))
 
         fusion_lines = []; overlay = []
         for tid, r in list(registry.items()):
@@ -533,7 +543,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
                                     f"snr {radar.get('snr', 0):5.1f} | v {radar['velocity_mps']:+5.2f} | {r['state']}")
             elif da3 is not None and (r.get("ratio") or _da3_scale[0] > 0):
-                ratio = r.get("ratio") or _da3_scale[0]
+                ratio = _obj_scale(r)
                 est = da3 * ratio
                 o["range_m"] = round(est, 2); o["n"] = 0; o["est"] = True
                 snr_note = f" (radar snr {radar['snr']:.1f}<{SNR_MIN:.0f})" if radar else ""
