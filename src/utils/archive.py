@@ -108,9 +108,6 @@ def archive_data():
     if not items:
         return
 
-    # GLB / templates 보존
-    saved = _save_preserved(_ARCHIVE_DIR)
-
     # 시작 시각
     if _F_START.exists():
         start_str = _F_START.read_text().strip()
@@ -154,6 +151,3 @@ def archive_data():
         f.unlink(missing_ok=True)
 
     print(f"[Archive] → archive/{folder_name}/")
-
-    # GLB / templates 복원
-    _restore_preserved(saved)
