@@ -8,6 +8,9 @@ import webbrowser
 import http.server
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 from src.utils.archive import (
