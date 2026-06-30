@@ -126,8 +126,8 @@ def iou(a, b):
     return inter / ua if ua > 0 else 0.0
 
 
-def match_one(targets, bbox, cam, bbox_dist=None, last_range=None,
-              gate_da3=1.2, gate_track=0.5, mask=None):
+def match_one(targets, bbox, cam, bbox_dist=None, last_range=None, last_az=None,
+              gate_da3=2.0, gate_track=0.5, mask=None):
     """bbox 안 레이더 검출점으로 거리 추정 (DA3 초기화 + 연속성 추적 게이트).
 
     mask(fh×fw, >0.5=물체)를 주면 bbox 사각형 대신 마스크 가로투영(그 x열에
@@ -177,15 +177,26 @@ def match_one(targets, bbox, cam, bbox_dist=None, last_range=None,
         gated = [t for t in inside if abs(t["range_m"] - ref) <= gate]
         if gated:
             inside = gated
-        elif bbox_dist is not None:
-            # 그 거리에 레이더 점 없음(멀어 약한 물체 등) → DA3 거리 신뢰(앞물체 오염 방지)
-            az_rep = sum(t["azimuth_deg"] for t in inside) / len(inside)
-            return {
-                "range_m":      round(float(bbox_dist), 3),
-                "azimuth_deg":  round(float(az_rep), 2),
-                "velocity_mps": 0.0,
-                "n_points":     0,
-            }
+        else:
+            # 이번 프레임 그 거리에 레이더 점 없음(정적물체는 매 프레임 일관 검출 안 됨).
+            # 마지막 레이더 실측(last_range/az)이 있으면 그걸 유지 — 정적물체는 안 움직임.
+            # 한 번도 레이더에 안 잡혔으면(last 없음) DA3 거리로 폴백.
+            if last_range is not None:
+                return {
+                    "range_m":      round(float(last_range), 3),
+                    "azimuth_deg":  round(float(last_az), 2) if last_az is not None
+                                    else round(sum(t["azimuth_deg"] for t in inside) / len(inside), 2),
+                    "velocity_mps": 0.0,
+                    "n_points":     0,
+                }
+            if bbox_dist is not None:
+                az_rep = sum(t["azimuth_deg"] for t in inside) / len(inside)
+                return {
+                    "range_m":      round(float(bbox_dist), 3),
+                    "azimuth_deg":  round(float(az_rep), 2),
+                    "velocity_mps": 0.0,
+                    "n_points":     0,
+                }
 
     # 거리·방위각·속도 각각 중앙값 (점 1개 대표보다 robust).
     # 특히 az 는 빔폭 noise(±15°)가 커서, 점 1개를 쓰면 정지 물체도 프레임마다

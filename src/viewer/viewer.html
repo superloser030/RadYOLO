@@ -144,8 +144,12 @@ async function poll2d() {
         }
         ctx.font = '15px monospace';
         const tw = ctx.measureText(label).width;
-        ctx.fillStyle = c;     ctx.fillRect(X, Y - 19, tw + 8, 19);
-        ctx.fillStyle = '#000'; ctx.fillText(label, X + 4, Y - 5);
+        // 라벨이 캔버스 좌/우로 넘치면 안쪽으로 당김 (짤림 방지)
+        let LX = Math.max(0, Math.min(X, ov.width - (tw + 8)));
+        // bbox 위로 나가면(Y<19) 박스 안쪽 위로 내림
+        let LY = Y - 19 < 0 ? Y + 1 : Y - 19;
+        ctx.fillStyle = c;     ctx.fillRect(LX, LY, tw + 8, 19);
+        ctx.fillStyle = '#000'; ctx.fillText(label, LX + 4, LY + 14);
       }
     } catch (e) {}
   }

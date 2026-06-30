@@ -483,11 +483,15 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 continue   # 이번 프레임 미검출(miss 중)
             inst = f"{r['cls']}_{tid}"
             radar = match_one(targets, r["bbox"], cam_cfg, bbox_dist=d["mdist"],
-                              last_range=r.get("last_range"), mask=d["m_frame"])
+                              last_range=r.get("last_range"), last_az=r.get("last_az"),
+                              mask=d["m_frame"])
             o = {"name": inst, "cls": r["cls"], "conf": round(r["conf"], 2),
                  "bbox": [round(v) for v in r["bbox"]], "state": r["state"]}
             if radar:
-                r["last_range"] = radar["range_m"]
+                # 레이더 실측(n>0)일 때만 추적 기준 갱신 — DA3/유지값 오염 방지
+                if radar.get("n_points", 0) > 0:
+                    r["last_range"] = radar["range_m"]
+                    r["last_az"]    = radar["azimuth_deg"]
                 o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
                 fusion_lines.append(f"[Fusion] {inst:14} {radar['range_m']:6.2f}m | "
