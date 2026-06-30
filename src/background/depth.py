@@ -13,7 +13,7 @@ INPUT_PATH     = PROJECT_ROOT / "data" / "scene" / "background.jpg"
 OUTPUT_PATH    = PROJECT_ROOT / "data" / "scene" / "depth.png"
 METRIC_PATH    = PROJECT_ROOT / "data" / "scene" / "depth_metric.npy"
 CALIB_PATH     = PROJECT_ROOT / "data" / "scene" / "depth_calib.json"
-WORKFLOW_PATH  = PROJECT_ROOT / "workflows" / "da3_depth.json"
+WORKFLOW_PATH  = PROJECT_ROOT / "workflows_comfyui" / "da3_depth.json"
 
 
 def _write_metric_vis(metric_npy: Path, png_path: Path, calib_path: Path):

@@ -8,7 +8,7 @@ from pathlib import Path
 
 PROJECT_ROOT   = Path(__file__).resolve().parent.parent.parent
 OBJECTS_DIR    = PROJECT_ROOT / "data" / "objects"
-WORKFLOW_PATH  = PROJECT_ROOT / "workflows" / "flux_kontext.json"
+WORKFLOW_PATH  = PROJECT_ROOT / "workflows_comfyui" / "flux_kontext.json"
 
 COMFYUI_URL    = "http://127.0.0.1:8188"
 COMFYUI_INPUT  = Path("C:/dev/ComfyUI/input")
