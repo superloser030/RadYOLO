@@ -19,10 +19,12 @@ def _load_env():
                 os.environ.setdefault(k.strip(), v.strip())
 
 
-def generate_3d(obj_dir: Path) -> bool:
-    """
-    cutout.jpg → fal.ai Trellis → model_trellis.glb
-    Returns True on success.
+def generate_3d(obj_dir: Path, extra_cutouts=None) -> bool:
+    """cutout.jpg (+ 선택적 extra_cutouts) → fal.ai Trellis → model_trellis.glb.
+
+    extra_cutouts: [Path, ...] — 추가 뷰 cutout 경로 목록.
+      - 없거나 비어 있으면 단일뷰 fal-ai/trellis
+      - 있으면 멀티뷰 fal-ai/trellis/multi (image_urls 배열)
     """
     _load_env()
 
@@ -39,22 +41,43 @@ def generate_3d(obj_dir: Path) -> bool:
         print("[Trellis] fal-client 미설치. pip install fal-client")
         return False
 
-    print(f"[Trellis] {obj_dir.name}: 이미지 업로드 중...")
-    image_url = fal_client.upload_file(str(cutout))
+    extras = [p for p in (extra_cutouts or []) if Path(p).exists()]
+    multi  = len(extras) > 0
 
-    print(f"[Trellis] {obj_dir.name}: 3D 생성 중 (30~60초)...")
-    result = fal_client.run(
-        "fal-ai/trellis",
-        arguments={
-            "image_url": image_url,
-            "ss_guidance_strength": 7.5,
-            "ss_sampling_steps": 12,
-            "slat_guidance_strength": 3.0,
-            "slat_sampling_steps": 12,
-            "mesh_simplify": 0.95,
-            "texture_size": 1024,
-        },
-    )
+    if multi:
+        print(f"[Trellis] {obj_dir.name}: 멀티뷰 업로드 ({1 + len(extras)}장)...")
+        all_urls = [fal_client.upload_file(str(cutout))]
+        for p in extras:
+            all_urls.append(fal_client.upload_file(str(p)))
+        print(f"[Trellis] {obj_dir.name}: 멀티뷰 3D 생성 중...")
+        result = fal_client.run(
+            "fal-ai/trellis/multi",
+            arguments={
+                "image_urls": all_urls,
+                "ss_guidance_strength": 7.5,
+                "ss_sampling_steps": 12,
+                "slat_guidance_strength": 3.0,
+                "slat_sampling_steps": 12,
+                "mesh_simplify": 0.95,
+                "texture_size": 1024,
+            },
+        )
+    else:
+        print(f"[Trellis] {obj_dir.name}: 단일뷰 업로드 중...")
+        image_url = fal_client.upload_file(str(cutout))
+        print(f"[Trellis] {obj_dir.name}: 3D 생성 중 (30~60초)...")
+        result = fal_client.run(
+            "fal-ai/trellis",
+            arguments={
+                "image_url": image_url,
+                "ss_guidance_strength": 7.5,
+                "ss_sampling_steps": 12,
+                "slat_guidance_strength": 3.0,
+                "slat_sampling_steps": 12,
+                "mesh_simplify": 0.95,
+                "texture_size": 1024,
+            },
+        )
 
     glb_url = (result.get("model_mesh") or {}).get("url")
     if not glb_url:

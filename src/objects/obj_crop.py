@@ -152,6 +152,20 @@ def load_sam2():
     return _load_sam2()
 
 
+def crop_one_extra(img, bbox, sam2):
+    """추가 뷰 cutout ndarray 반환 (디렉토리 생성 없음). SAM2 set_image는 호출자 책임."""
+    h, w = img.shape[:2]
+    x1, y1, x2, y2 = map(int, bbox)
+    masks, _, _ = sam2.predict(
+        box=np.array([x1, y1, x2, y2], dtype=np.float32), multimask_output=False)
+    sam_mask = (masks[0] > 0).astype(np.uint8) * 255
+    cx1, cy1 = max(0, x1 - BBOX_PAD), max(0, y1 - BBOX_PAD)
+    cx2, cy2 = min(w, x2 + BBOX_PAD), min(h, y2 + BBOX_PAD)
+    white  = np.full_like(img, 255)
+    cutout = np.where(sam_mask[:, :, None] > 0, img, white)
+    return cutout[cy1:cy2, cx1:cx2]
+
+
 def crop_one(img, bbox, class_name, tid, sam2):
     """현재 프레임의 한 객체 → data/objects/<class>_<tid>/ (cutout/crop/mask/meta).
 

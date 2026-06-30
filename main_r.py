@@ -170,7 +170,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     import numpy as np
     from ultralytics import YOLO
     from src.objects.radar_fusion import load_latest_targets, match_one, depth_to_range, iou
-    from src.objects.obj_crop import load_sam2, crop_one, SKIP_CLASSES
+    from src.objects.obj_crop import load_sam2, crop_one, crop_one_extra, SKIP_CLASSES
     from src.objects.trellis_gen import generate_3d
     from src.background.depth import generate_depth
     from src.background.upscale import upscale_image
@@ -276,7 +276,10 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
     _next_tid = [0]
     MISS_MAX, IOU_TH = 10, 0.15
-    GRAVEYARD_TTL = 120.0   # 120초 후 graveyard 에서 영구 삭제
+    GRAVEYARD_TTL  = 120.0   # 120초 후 graveyard 에서 영구 삭제
+    MIN_VIEWS      = 3        # COLLECTING → MODELING 최소 뷰 수
+    COLLECT_TIMEOUT = 30.0    # 30초 경과 시 보유 뷰로 강제 진입
+    MOVE_TH        = 0.30     # bbox폭 대비 중심이동 임계값
     _last_fusion = 0.0
 
     while not receiver.shutdown_event.is_set():
@@ -394,32 +397,78 @@ def live_update_loop(cam_cfg, enable_pose=True):
 
             if not enable_pose:
                 continue
-            # NEW →(model_conf)→ MODELING: DA3 재추론 + crop + fal.ai 3D (백그라운드)
+            # NEW →(model_conf)→ COLLECTING: 멀티뷰 수집 시작
             if (r["state"] == "NEW" and r["conf"] >= model_conf
-                    and r["cls"] not in SKIP_CLASSES and not _busy.get(tid)):
-                _busy[tid] = True; r["state"] = "MODELING"
-                big = cv2.resize(frame, (cam_w, cam_h))   # crop/SAM2 용 (1920)
-                raw = frame.copy()                         # DA3 ESRGAN 용 (원본 해상도)
-                bb  = list(r["bbox"]); cls_name = r["cls"]
-                def _model_bg(tid=tid, big=big, raw=raw, bb=bb, cls_name=cls_name):
-                    try:
-                        _da3_rerun_shared(raw)          # 원본→ESRGAN→DA3 (배경과 동일 경로)
-                        with _sam2_lock:                # SAM2 동시 호출 직렬화
-                            sam = _get_sam2()
-                            sam.set_image(cv2.cvtColor(big, cv2.COLOR_BGR2RGB))
-                            od = crop_one(big, bb, cls_name, tid, sam)
-                        generate_3d(od)                 # fal.ai 원격(동시 OK)
-                        if tid in registry:
-                            registry[tid]["state"] = "READY"
-                            registry[tid]["glb"]   = str(od / "model_trellis.glb")
-                        print(f"[State] {cls_name}_{tid} → READY")
-                    except Exception as e:
-                        print(f"[State] {cls_name}_{tid} MODELING 실패: {e}")
-                        if tid in registry:
-                            registry[tid]["state"] = "NEW"
-                    finally:
-                        _busy[tid] = False
-                threading.Thread(target=_model_bg, daemon=True).start()
+                    and r["cls"] not in SKIP_CLASSES):
+                r["state"] = "COLLECTING"
+                r["views"] = []; r["collect_start"] = time.time()
+                r["last_view_cx"] = r["last_view_cy"] = None
+                od = OBJECTS_DIR / f"{r['cls']}_{tid}"
+                (od / "views").mkdir(parents=True, exist_ok=True)
+                print(f"[State] {r['cls']}_{tid} NEW → COLLECTING")
+
+            # COLLECTING: 움직임 감지 시 뷰 저장 → 조건 충족 시 MODELING 진입
+            elif r["state"] == "COLLECTING" and d is not None and not _busy.get(tid):
+                bw = max(1.0, r["bbox"][2] - r["bbox"][0])
+                lcx, lcy = r.get("last_view_cx"), r.get("last_view_cy")
+                moved = (lcx is None or
+                         ((d["cx"] - lcx)**2 + (d["cy"] - lcy)**2)**0.5 > bw * MOVE_TH)
+                if moved and d["conf"] >= model_conf and d["m_frame"] is not None:
+                    od = OBJECTS_DIR / f"{r['cls']}_{tid}"
+                    vp = od / "views" / f"view_{len(r['views']):03d}.jpg"
+                    cv2.imwrite(str(vp), cv2.resize(frame, (cam_w, cam_h)))
+                    r["views"].append({"cx": d["cx"], "cy": d["cy"],
+                                       "bbox": list(r["bbox"]), "path": str(vp)})
+                    r["last_view_cx"] = d["cx"]; r["last_view_cy"] = d["cy"]
+                    print(f"[Collect] {r['cls']}_{tid} view #{len(r['views'])}")
+                elapsed = time.time() - r.get("collect_start", time.time())
+                # 타임아웃 + 뷰 없음 → 현재 프레임 단일뷰로 강제 저장
+                if elapsed > COLLECT_TIMEOUT and not r["views"] and d["m_frame"] is not None:
+                    od = OBJECTS_DIR / f"{r['cls']}_{tid}"
+                    vp = od / "views" / "view_000.jpg"
+                    cv2.imwrite(str(vp), cv2.resize(frame, (cam_w, cam_h)))
+                    r["views"].append({"cx": d["cx"], "cy": d["cy"],
+                                       "bbox": list(r["bbox"]), "path": str(vp)})
+                # 충분한 뷰 또는 타임아웃 → MODELING
+                if r["views"] and (len(r["views"]) >= MIN_VIEWS or elapsed > COLLECT_TIMEOUT):
+                    _busy[tid] = True; r["state"] = "MODELING"
+                    raw = frame.copy(); views = list(r["views"]); cls_name = r["cls"]
+                    def _model_bg(tid=tid, raw=raw, views=views, cls_name=cls_name):
+                        try:
+                            _da3_rerun_shared(raw)
+                            od = OBJECTS_DIR / f"{cls_name}_{tid}"
+                            extra_cutouts = []
+                            with _sam2_lock:
+                                sam = _get_sam2()
+                                # 첫 번째 뷰 → main cutout (obj_dir 구조 생성)
+                                f0 = cv2.imread(views[0]["path"])
+                                sam.set_image(cv2.cvtColor(f0, cv2.COLOR_BGR2RGB))
+                                crop_one(f0, views[0]["bbox"], cls_name, tid, sam)
+                                # 추가 뷰 → views/ 디렉토리에 cutout 저장
+                                for i, v in enumerate(views[1:], 1):
+                                    vf = cv2.imread(v["path"])
+                                    if vf is None:
+                                        continue
+                                    sam.set_image(cv2.cvtColor(vf, cv2.COLOR_BGR2RGB))
+                                    ct = crop_one_extra(vf, v["bbox"], sam)
+                                    if ct is not None:
+                                        cp = od / "views" / f"view_{i:03d}_cutout.jpg"
+                                        cv2.imwrite(str(cp), ct, [cv2.IMWRITE_JPEG_QUALITY, 95])
+                                        extra_cutouts.append(cp)
+                            generate_3d(od, extra_cutouts=extra_cutouts or None)
+                            if tid in registry:
+                                registry[tid]["state"] = "READY"
+                                registry[tid]["glb"]   = str(od / "model_trellis.glb")
+                            print(f"[State] {cls_name}_{tid} → READY "
+                                  f"({'멀티뷰 ' + str(1+len(extra_cutouts)) + '장' if extra_cutouts else '단일뷰'})")
+                        except Exception as e:
+                            print(f"[State] {cls_name}_{tid} MODELING 실패: {e}")
+                            if tid in registry:
+                                registry[tid]["state"] = "NEW"
+                        finally:
+                            _busy[tid] = False
+                    threading.Thread(target=_model_bg, daemon=True).start()
+
             # READY → GigaPose pose (백그라운드)
             elif (r["state"] == "READY"
                   and not _busy.get(f"pose{tid}")
