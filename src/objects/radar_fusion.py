@@ -202,6 +202,24 @@ def _split_by_gaps(pts, n):
     return clusters
 
 
+def _snr_cluster(pts, gap_m=0.7):
+    """객체 점들을 거리 갭(>gap_m)으로 클러스터링 → SNR 합 최대 클러스터만 반환.
+
+    거리 게이트가 없으면 한 물체 방위각에 앞(물체)+뒤(배경) 점이 섞여 median 이
+    출렁인다. 실제 물체는 강반사(SNR 큼)라, SNR 합이 가장 큰 거리 클러스터를
+    물체로 보고 나머지(약한 배경 누수)를 버린다. DA3 절대값은 안 쓴다."""
+    if len(pts) <= 1:
+        return pts
+    ps = sorted(pts, key=lambda t: t["range_m"])
+    clusters = [[ps[0]]]
+    for t in ps[1:]:
+        if t["range_m"] - clusters[-1][-1]["range_m"] > gap_m:
+            clusters.append([t])
+        else:
+            clusters[-1].append(t)
+    return max(clusters, key=lambda c: sum(t.get("snr", 0.0) for t in c))
+
+
 def match_all(targets, objs, cam):
     """여러 객체 일괄 매칭 — 거리 게이트 없음 + 겹친 물체 DA3 깊이순 분리.
 
@@ -238,7 +256,9 @@ def match_all(targets, objs, cam):
         for ci, cl in enumerate(clusters):
             obj_pts[grp_objs[min(ci, len(grp_objs) - 1)]].extend(cl)
 
-    return {objs[i]["tid"]: _aggregate(obj_pts[i]) for i in range(len(objs))}
+    # 객체별: 배경 누수 제거 — SNR 합 최대 거리 클러스터만 남겨 median
+    return {objs[i]["tid"]: _aggregate(_snr_cluster(obj_pts[i]))
+            for i in range(len(objs))}
 
 
 def match_targets_to_objects(targets, objects, cam):

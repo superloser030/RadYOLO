@@ -392,6 +392,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     COLLECT_TIMEOUT = 30.0    # 30초 경과 시 보유 뷰로 강제 진입
     MOVE_TH        = 0.30     # bbox폭 대비 중심이동 임계값
     _last_fusion = 0.0
+    _da3_scale   = [0.0]      # R/DA3 비율(EMA) — 레이더 못 잡는 객체를 DA3×scale 로 대체
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -502,6 +503,18 @@ def live_update_loop(cam_cfg, enable_pose=True):
                          "mask": d["m_frame"], "da3": d.get("mdist")}
                         for tid, d in det_by_tid.items() if tid in registry]
         radar_by_tid = match_all(targets, match_objs, cam_cfg)
+
+        # 레이더 잡힌 객체들의 R/DA3 비율 median → EMA 로 _da3_scale 갱신.
+        # metric DA3 는 절대스케일이 일정비율(~2.5×) 과소라, 레이더로 그 배율을 추정해
+        # 레이더 못 잡는 객체(miss)를 DA3×scale 로 대체한다.
+        ratios = [radar_by_tid[t]["range_m"] / det_by_tid[t]["mdist"]
+                  for t in radar_by_tid
+                  if radar_by_tid[t] and radar_by_tid[t]["n_points"] > 0
+                  and det_by_tid[t].get("mdist") and det_by_tid[t]["mdist"] > 0.05]
+        if ratios:
+            fs = float(np.median(ratios))
+            _da3_scale[0] = 0.7 * _da3_scale[0] + 0.3 * fs if _da3_scale[0] > 0 else fs
+
         fusion_lines = []; overlay = []
         for tid, r in list(registry.items()):
             d = det_by_tid.get(tid)
@@ -522,6 +535,12 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 fusion_lines.append(f"[Fusion] {inst:14} R {radar['range_m']:5.2f}m | {da3_str} | "
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
                                     f"snr {radar.get('snr', 0):5.1f} | {r['state']}")
+            elif da3 is not None and _da3_scale[0] > 0:
+                # 레이더 미검출 → DA3×scale 추정치 (n=0, est)
+                est = da3 * _da3_scale[0]
+                o["range_m"] = round(est, 2); o["n"] = 0; o["est"] = True
+                fusion_lines.append(f"[Fusion] {inst:14} R~{est:5.2f}m | {da3_str} | "
+                                    f"est(DA3×{_da3_scale[0]:.2f}) | {r['state']}")
             else:
                 fusion_lines.append(f"[Fusion] {inst:14} miss      | {da3_str} | {r['state']}")
             overlay.append(o)
