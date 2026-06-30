@@ -1,10 +1,10 @@
 % ============================================================
 %  RadYOLO 보고서 — Overleaf 권장 컴파일러: XeLaTeX (kotex)
 % ============================================================
-\documentclass[11pt,oneside]{book}
+\documentclass[11pt]{article}
 
 \usepackage{kotex}                       % 한글
-\usepackage[margin=2.5cm]{geometry}
+\usepackage[margin=2cm]{geometry}
 \usepackage{graphicx,float}
 \graphicspath{{figures/}}        % docs/report/figures/ 에 스크린샷 배치
 \usepackage{amsmath,amssymb}
@@ -37,6 +37,11 @@
 % ── 설계결정/문제해결 강조 박스 ──────────────────────────
 \newtcolorbox{designbox}[1]{colback=blue!4,colframe=blue!45!black,
   title=설계 결정: #1, fonttitle=\bfseries, boxrule=0.5pt, breakable}
+
+% ── book 계층을 article 로 매핑 (chapter 새 페이지 제거 → 페이지 절감) ──
+\let\chapter\section
+\let\section\subsection
+\let\subsection\subsubsection
 
 \title{\textbf{RadYOLO}\\[4pt]
   \large mmWave 레이더 -- 카메라 융합 기반\\ 실시간 거리 추정 및 3D 장면 복원}
