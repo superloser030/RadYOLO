@@ -184,91 +184,45 @@ def match_one(targets, bbox, cam, mask=None):
     return _aggregate(inside)
 
 
-def _split_by_gaps(pts, n):
-    """거리 오름차순 점 리스트를 거리 최대 갭 n-1 곳에서 n개 클러스터로 분할.
+def match_all(targets, objs, cam, gate_frac=0.5, gate_min=1.2):
+    """여러 객체 일괄 매칭 — expected(DA3×비율) 기준 거리 게이트로 클러스터 구분.
 
-    겹친 n개 물체에 점을 나눠 줄 때 사용 — 자연스러운 거리 간격(앞물체/뒷물체
-    사이 빈 공간)에서 끊는다. 점 수 < n 이면 가능한 만큼만(뒤 클러스터는 빔)."""
-    if n <= 1 or len(pts) <= 1:
-        return [pts]
-    gaps = sorted(((pts[i+1]["range_m"] - pts[i]["range_m"], i)
-                   for i in range(len(pts) - 1)), reverse=True)
-    cuts = sorted(i for _, i in gaps[:n-1])
-    clusters, start = [], 0
-    for c in cuts:
-        clusters.append(pts[start:c+1])
-        start = c + 1
-    clusters.append(pts[start:])
-    return clusters
+    거리 게이트의 기준(ref)을 DA3 절대값(부정확) 대신 expected=DA3×비율(metric)로
+    쓴다. 그래서 게이트가 클러스터를 정확히 구분한다:
+      - 단일 물체: expected±gate 안의 점만 → 벽/배경 누수 제거, 실측 그대로
+      - 겹친 물체: 한 점이 여러 객체 방위각에 들어도 각자 expected 게이트로 갈림.
+        약반사로 자기 거리에 점 없는 물체는 먼 점이 게이트 밖이라 안 받음 → miss
+      - 어느 게이트에도 안 들면 그 점은 배경/노이즈로 버림
 
-
-def _snr_cluster(pts, gap_m=0.7):
-    """객체 점들을 거리 갭(>gap_m)으로 클러스터링 → SNR 합 최대 클러스터만 반환.
-
-    거리 게이트가 없으면 한 물체 방위각에 앞(물체)+뒤(배경) 점이 섞여 median 이
-    출렁인다. 실제 물체는 강반사(SNR 큼)라, SNR 합이 가장 큰 거리 클러스터를
-    물체로 보고 나머지(약한 배경 누수)를 버린다. DA3 절대값은 안 쓴다."""
-    if len(pts) <= 1:
-        return pts
-    ps = sorted(pts, key=lambda t: t["range_m"])
-    clusters = [[ps[0]]]
-    for t in ps[1:]:
-        if t["range_m"] - clusters[-1][-1]["range_m"] > gap_m:
-            clusters.append([t])
-        else:
-            clusters[-1].append(t)
-    return max(clusters, key=lambda c: sum(t.get("snr", 0.0) for t in c))
-
-
-def match_all(targets, objs, cam):
-    """여러 객체 일괄 매칭 — 거리 게이트 없음 + 겹친 물체 DA3 깊이순 분리.
-
-    objs: [{"tid", "bbox", "mask"(optional), "da3"(optional), "expected"(optional)}].
-      expected = DA3×비율(예상 미터거리). 겹침 시 점을 예상거리 최근접 객체에 배정.
+    gate = max(gate_min, expected*gate_frac). 한 점이 여러 게이트 통과 시 expected
+    최근접 객체 1개에만. objs: [{"tid","bbox","mask"?,"da3"?,"expected"?}].
     반환 {tid: matchdict | None}.
-
-    1) 각 레이더 점을 방위각으로 매칭되는 객체(들)에 배정
-    2) 1개 객체만 매칭 → 그 객체 점
-    3) 여러 객체 겹침(같은 az):
-       - expected(예상거리) 있으면 → 각 점을 예상거리 가장 가까운 객체에 배정.
-         (한 물체가 레이더 약반사로 자기 점이 없으면 먼 점을 안 받고 miss→DA3추정)
-       - 없으면(첫 등장) → 거리 클러스터를 DA3 오름차순(앞→뒤)으로 분배 fallback
-    4) 객체별 배정 점 median → 거리
     """
     profs = [_azimuth_profile(o["bbox"], o.get("mask"), cam) for o in objs]
     obj_pts = {i: [] for i in range(len(objs))}
-    overlap = {}   # frozenset(obj idx) -> [point]
 
     for t in targets:
         sx = radar_to_x(t["range_m"], t["azimuth_deg"], cam)
         if sx is None:
             continue
-        hit = [i for i, prof in enumerate(profs) if _in_profile(sx, prof)]
-        if len(hit) == 1:
-            obj_pts[hit[0]].append(t)
-        elif len(hit) > 1:
-            overlap.setdefault(frozenset(hit), []).append(t)
+        # 방위각 매칭 객체 중 expected 거리 게이트 통과한 것 → expected 최근접 1개
+        cands = []
+        for i, prof in enumerate(profs):
+            if not _in_profile(sx, prof):
+                continue
+            exp = objs[i].get("expected")
+            if exp is None:
+                cands.append((i, 0.0))            # expected 없으면 게이트 없이 후보
+            else:
+                gate = max(gate_min, exp * gate_frac)
+                dist = abs(t["range_m"] - exp)
+                if dist <= gate:
+                    cands.append((i, dist))
+        if cands:
+            obj_pts[min(cands, key=lambda c: c[1])[0]].append(t)
+        # 게이트 다 탈락 → 배경/노이즈로 버림
 
-    # 겹침 그룹 배정
-    for grp, pts in overlap.items():
-        have_exp = [i for i in grp if objs[i].get("expected") is not None]
-        if have_exp:
-            # 예상거리(DA3×비율) 최근접 객체에 점 배정. 약반사로 자기 점 없는
-            # 가까운 물체는 먼 점을 안 받아 miss → DA3 추정으로 빠진다.
-            for t in pts:
-                best = min(have_exp, key=lambda i: abs(t["range_m"] - objs[i]["expected"]))
-                obj_pts[best].append(t)
-        else:
-            grp_objs = sorted(grp, key=lambda i: (objs[i].get("da3")
-                                                  if objs[i].get("da3") is not None else 1e9))
-            pts_sorted = sorted(pts, key=lambda t: t["range_m"])
-            clusters = _split_by_gaps(pts_sorted, len(grp_objs))
-            for ci, cl in enumerate(clusters):
-                obj_pts[grp_objs[min(ci, len(grp_objs) - 1)]].extend(cl)
-
-    # 객체별: 배경 누수 제거 — SNR 합 최대 거리 클러스터만 남겨 median
-    return {objs[i]["tid"]: _aggregate(_snr_cluster(obj_pts[i]))
-            for i in range(len(objs))}
+    return {objs[i]["tid"]: _aggregate(obj_pts[i]) for i in range(len(objs))}
 
 
 def match_targets_to_objects(targets, objects, cam):
