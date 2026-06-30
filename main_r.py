@@ -394,6 +394,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _last_fusion = 0.0
     _da3_scale   = [3.0]      # 전역 R/DA3 비율(median) — 미잡힌 객체 fallback. 초기 3.0
                               #   (metric DA3 가 대략 ×3 과소). 실측 누적되면 갱신.
+    _prev_da3_ts = [0.0]      # DA3 재추론 완료 감지용(da3_0 리셋 트리거)
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -498,8 +499,20 @@ def live_update_loop(cam_cfg, enable_pose=True):
 
         # ── 3. 거리 매칭 + overlay + 상태 전이 ──
         det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
+
+        # DA3 metric 을 5초마다 현재 프레임으로 재추론(백그라운드) → depth_metric 갱신.
+        # 정적 snapshot 이라 물체가 움직이면 위치 depth 가 안 맞으므로 주기적으로 새로 찍는다.
+        if time.time() - _da3_last[0] >= 5.0:
+            _fb = cv2.resize(frame, (cam_w, cam_h), interpolation=cv2.INTER_LINEAR)
+            threading.Thread(target=_da3_rerun_shared, args=(_fb,), daemon=True).start()
+        # 재추론 완료(_da3_last 변화) → 모든 da3_0 리셋 → 새 depth 위치값으로 재설정
+        if _da3_last[0] != _prev_da3_ts[0]:
+            _prev_da3_ts[0] = _da3_last[0]
+            for _tid in registry:
+                registry[_tid]["da3_0"] = None
+
         # DA3 는 정적 snapshot 이라 물체가 움직이면 그 위치 depth 가 안 맞는다.
-        # → 객체별 '첫 DA3 값'을 고정 기억(da3_0)해서 이후 그걸 쓴다(정지물체 기준).
+        # → 객체별 DA3 값을 고정 기억(da3_0); 5초 재추론 때마다 리셋되어 갱신된다.
         for tid, d in det_by_tid.items():
             if tid in registry and registry[tid].get("da3_0") is None and d.get("mdist"):
                 registry[tid]["da3_0"] = round(float(d["mdist"]), 3)
