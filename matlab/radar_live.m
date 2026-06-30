@@ -39,7 +39,8 @@ rdresp = phased.RangeDopplerResponse('PropagationSpeed', c, ...
 
 cfar = phased.CFARDetector2D('Method', 'CA', ...
     'TrainingBandSize', [8 4], 'GuardBandSize', [4 2], ...
-    'ProbabilityFalseAlarm', 1e-4);
+    'ProbabilityFalseAlarm', 1e-4, ...
+    'ThresholdOutputPort', true);   % noise threshold 출력 → SNR 계산용
 
 ang = -60:0.5:60;
 doa = phased.BeamscanEstimator('SensorArray', varray, 'PropagationSpeed', c, ...
@@ -88,7 +89,7 @@ while true
     try
         xrv = readRadarCube(fr, lastIdx);
         [resp, rngGrid, dopGrid] = rangeDopplerMap(xrv, rdresp);
-        [ri, di, ~] = cfarDetect(resp, cfar, p, rngGrid);
+        [ri, di, powList, snrList] = cfarDetect(resp, cfar, p, rngGrid);
     catch ME
         warning('파이프라인 오류: %s', ME.message);
         clear fr; pause(POLL_SEC); continue;
@@ -96,7 +97,8 @@ while true
 
     % ── 검출점 → targets.json (클러스터 없이 그대로) ──────────────────────
     % ⚠ 검증필요: az 부호. radar_fusion.NEGATE_AZIMUTH 와 함께 좌우 맞출 것.
-    targets = struct('range_m', {}, 'azimuth_deg', {}, 'velocity_mps', {});
+    targets = struct('range_m', {}, 'azimuth_deg', {}, 'velocity_mps', {}, ...
+                     'power', {}, 'snr', {});
     if ~isempty(ri)
         az      = estimateAzimuth(resp, ri, di, doa);
         rngVals = rngGrid(ri);
@@ -105,6 +107,8 @@ while true
             targets(end+1).range_m    = rngVals(k);     %#ok<AGROW>
             targets(end).azimuth_deg  = az(k);
             targets(end).velocity_mps = dopVals(k);
+            targets(end).power        = powList(k);     % 반사 강도 |·|²
+            targets(end).snr          = snrList(k);     % power / noise_threshold
         end
     end
 
