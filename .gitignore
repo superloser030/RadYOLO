@@ -23,6 +23,7 @@ data/radar/
 data/objects/
 data/webcam/
 data/.session_*
+db/                 # 객체 모델 DB(glb/appearance) — 재모델링으로 재생성
 
 # 외부 도구 (별도 repo)
 tools/gigapose/
