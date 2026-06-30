@@ -98,6 +98,8 @@ let renderer, scene, camera, controls, pointsMat = null;
 let bgPoints = null, bgGeo = null;    // 배경 포인트클라우드 (pollBgUpdate 에서 갱신)
 let bgTsCache = '', _bgCamCfg = null; // DynBG 재빌드용 상태
 let _calib = null;
+let loadedDirs = new Set();   // 이미 로드된 obj.dir 추적
+let _objCamParams = null;     // build3D에서 저장 → pollManifest에서 재사용
 
 // ════════════════════════════════════════════════════════════════════
 // 2D 레이어 — 웹캠 + bbox + 레이더 거리
@@ -211,24 +213,22 @@ function clampTilt(Rv) {
   ];
 }
 
-async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
-  const manifest = await fetch('/data/objects/manifest.json')
-    .then(r => r.ok ? r.json() : []).catch(() => []);
-  if (!manifest.length) return;
+function _loadOneObject(obj, depthImg, W, H, fx, fy, cx, cy) {
   const loader = new GLTFLoader();
-  for (const obj of manifest) {
-    if (!obj.has_pose || !obj.has_model) continue;
-    const [pose, tmplMeta] = await Promise.all([
-      fetch(`/data/objects/${obj.dir}/pose.json`).then(r => r.json()),
-      fetch(`/data/objects/${obj.dir}/templates/meta.json`).then(r => r.json()),
-    ]).catch(() => [null, null]);
-    if (!pose || !tmplMeta) continue;
-    const state = poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy);
-    if (!state) continue;
+  // pose/templates 초기 로드 시도 (없으면 pollRot이 나중에 채움)
+  Promise.all([
+    fetch(`/data/objects/${obj.dir}/pose.json?_=${Date.now()}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    fetch(`/data/objects/${obj.dir}/templates/meta.json?_=${Date.now()}`).then(r => r.ok ? r.json() : null).catch(() => null),
+  ]).then(([pose, tmplMeta]) => {
+    let vx = 0, vy = 0, vz = -1.5, Rv = [[1,0,0],[0,1,0],[0,0,1]], tz = 1.5;
+    if (pose) {
+      const st = poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy);
+      if (st) ({ vx, vy, vz, Rv, tz } = st);
+    }
     loader.load(`/data/objects/${obj.dir}/model_trellis.glb`, (gltf) => {
       const group = new THREE.Group();
-      const mc = tmplMeta.mesh_center || [0, 0, 0];
-      const mr = tmplMeta.mesh_radius || 1.0;
+      const mc = (tmplMeta && tmplMeta.mesh_center) || [0, 0, 0];
+      const mr = (tmplMeta && tmplMeta.mesh_radius) || 1.0;
       gltf.scene.position.set(-mc[0], -mc[1], -mc[2]);
       gltf.scene.scale.setScalar(0.5 / mr);
       group.add(gltf.scene);
@@ -241,7 +241,6 @@ async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
           0, 0, 0, 1);
         g.setRotationFromMatrix(rm);
       }
-      let { vx, vy, vz, Rv, tz } = state;
       group.position.set(vx, vy, vz);
       group.scale.setScalar(1.0 / tz);
       applyRv(group, clampTilt(Rv));
@@ -249,7 +248,7 @@ async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
         if (mode === '3d') try {
           const live = await fetch(`/data/objects/${obj.dir}/live.json?_=${Date.now()}`).then(r => r.json());
           if (typeof live.bbox_cx === 'number') {
-            const d = -vz;   // vz 음수(씬 안쪽) → d 양수 미터
+            const d = -vz;
             const nvx = (live.bbox_cx - cx) / fx * d;
             const nvy = -(live.bbox_cy - cy) / fy * d;
             group.position.set(nvx, nvy, vz);
@@ -266,8 +265,34 @@ async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
         setTimeout(pollRot, 1000);
       }
       pollPos(); pollRot();
+      console.log('[Viewer] 오브젝트 로드:', obj.dir);
     }, undefined, (err) => console.warn(`[Viewer] ${obj.dir} GLB 로드 실패:`, err));
+  });
+}
+
+async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
+  const manifest = await fetch('/data/objects/manifest.json')
+    .then(r => r.ok ? r.json() : []).catch(() => []);
+  for (const obj of manifest) {
+    if (!obj.has_model) continue;
+    loadedDirs.add(obj.dir);
+    _loadOneObject(obj, depthImg, W, H, fx, fy, cx, cy);
   }
+}
+
+async function pollManifest() {
+  if (mode !== '3d' || !scene || !_objCamParams) return;
+  try {
+    const manifest = await fetch('/data/objects/manifest.json?_=' + Date.now())
+      .then(r => r.ok ? r.json() : []).catch(() => []);
+    const { depthImg, W, H, fx, fy, cx, cy } = _objCamParams;
+    for (const obj of manifest) {
+      if (loadedDirs.has(obj.dir) || !obj.has_model) continue;
+      loadedDirs.add(obj.dir);
+      _loadOneObject(obj, depthImg, W, H, fx, fy, cx, cy);
+      console.log('[Viewer] pollManifest: 새 오브젝트 감지 →', obj.dir);
+    }
+  } catch(e) {}
 }
 
 function _buildPointsGeo(color, depth, maskImg, W, H, fx, fy, cx, cy) {
@@ -342,6 +367,7 @@ async function build3D() {
   const W = color.w, H = color.h;
   const fx = camCfg.fx, fy = camCfg.fy, cx = camCfg.cx, cy = camCfg.cy;
   _bgCamCfg = { W, H, fx, fy, cx, cy };
+  _objCamParams = { depthImg: depth, W, H, fx, fy, cx, cy };
   bgGeo = _buildPointsGeo(color, depth, maskImg, W, H, fx, fy, cx, cy);
   pointsMat = new THREE.PointsMaterial({ vertexColors: true, size: 0.003, sizeAttenuation: true });
   bgPoints = new THREE.Points(bgGeo, pointsMat);
@@ -403,7 +429,7 @@ async function setMode(m) {
   if (m === '3d' && !built3d) {
     const loading = document.getElementById('loading');
     loading.style.display = 'flex'; loading.textContent = '3D 로딩 중...';
-    try { await build3D(); built3d = true; animate3D(); setInterval(() => { if (mode === '3d') pollBgUpdate(); }, 15000); }
+    try { await build3D(); built3d = true; animate3D(); setInterval(() => { if (mode === '3d') pollBgUpdate(); }, 15000); setInterval(() => pollManifest(), 10000); }
     catch (e) { conPrint('3D 로드 실패: ' + e.message, 'err'); }
     loading.style.display = 'none';
   }

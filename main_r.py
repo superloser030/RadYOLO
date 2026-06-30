@@ -144,6 +144,28 @@ def _try_reid(graveyard, cls, bbox, appearance, now,
     return (best_tid, best_entry) if best_tid is not None else None
 
 
+def _update_manifest():
+    """data/objects/ 스캔 → manifest.json 갱신 (뷰어가 어떤 오브젝트를 로드할지 결정)."""
+    if not OBJECTS_DIR.exists():
+        return
+    manifest = []
+    for obj_dir in sorted(OBJECTS_DIR.iterdir()):
+        if not obj_dir.is_dir():
+            continue
+        meta_path = obj_dir / "meta.json"
+        try:
+            meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+        except Exception:
+            meta = {}
+        manifest.append({
+            "dir": obj_dir.name,
+            "class": meta.get("class", ""),
+            "has_model": (obj_dir / "model_trellis.glb").exists(),
+            "has_pose":  (obj_dir / "pose.json").exists(),
+        })
+    (OBJECTS_DIR / "manifest.json").write_text(json.dumps(manifest, indent=2))
+
+
 def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
     """백그라운드 스레드: GigaPose 추론 → pose.json 갱신 (회전/깊이)."""
     from src.objects.pose_estimator import estimate_pose
@@ -159,6 +181,7 @@ def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
     )
     if pose:
         (obj_dir / "pose.json").write_text(json.dumps(pose, indent=2))
+        _update_manifest()
         print(f"[Live-R] {obj_dir.name}: score={pose.get('score',0):.3f}  t={[round(v,3) for v in pose['t']]}")
 
 
@@ -462,6 +485,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                             if tid in registry:
                                 registry[tid]["state"] = "READY"
                                 registry[tid]["glb"]   = str(od / "model_trellis.glb")
+                                _update_manifest()
                             print(f"[State] {cls_name}_{tid} → READY "
                                   f"({'멀티뷰 ' + str(1+len(extra_cutouts)) + '장' if extra_cutouts else '단일뷰'})")
                         except Exception as e:
