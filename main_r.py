@@ -395,6 +395,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _da3_scale   = [3.0]      # 전역 R/DA3 비율(median) — 미잡힌 객체 fallback. 초기 3.0
                               #   (metric DA3 가 대략 ×3 과소). 실측 누적되면 갱신.
     _prev_da3_ts = [0.0]      # DA3 재추론 완료 감지용(da3_0 리셋 트리거)
+    SNR_MIN      = 4.0        # 레이더 신뢰 임계 — 이 미만은 실측 무시, DA3×비율 추정 사용
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -532,7 +533,8 @@ def live_update_loop(cam_cfg, enable_pose=True):
         for t in radar_by_tid:
             rd = radar_by_tid[t]
             da3_0 = registry[t].get("da3_0") if t in registry else None
-            if rd and rd["n_points"] > 0 and da3_0 and da3_0 > 0.05:
+            # 신뢰 실측(snr>=SNR_MIN)만 비율 학습 — 약검출이 비율 오염시키는 것 방지
+            if rd and rd["n_points"] > 0 and rd.get("snr", 0) >= SNR_MIN and da3_0 and da3_0 > 0.05:
                 ratio = rd["range_m"] / da3_0
                 old = registry[t].get("ratio")
                 registry[t]["ratio"] = 0.7 * old + 0.3 * ratio if old else ratio
@@ -554,7 +556,8 @@ def live_update_loop(cam_cfg, enable_pose=True):
             if da3 is not None:
                 o["da3_m"] = round(float(da3), 2)
             da3_str = f"DA3 {da3:5.2f}m" if da3 is not None else "DA3  --  "
-            if radar:
+            if radar and radar.get("snr", 0) >= SNR_MIN:
+                # 신뢰할 만한 레이더 실측(snr>=SNR_MIN)
                 o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
                 o["snr"] = radar.get("snr")
@@ -562,13 +565,14 @@ def live_update_loop(cam_cfg, enable_pose=True):
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
                                     f"snr {radar.get('snr', 0):5.1f} | {r['state']}")
             elif da3 is not None and (r.get("ratio") or _da3_scale[0] > 0):
-                # 레이더 미검출 → DA3×비율 추정치. 자기 비율 우선(정지물체 안정),
-                # 한 번도 안 잡혔으면 전역 평균 비율 사용. (n=0, est)
+                # 레이더 미검출 or 신뢰 낮음(snr<SNR_MIN) → DA3×비율 추정치.
+                # 자기 비율 우선(정지물체 안정), 없으면 전역 평균 비율. (n=0, est)
                 ratio = r.get("ratio") or _da3_scale[0]
                 est = da3 * ratio
                 o["range_m"] = round(est, 2); o["n"] = 0; o["est"] = True
+                snr_note = f" (radar snr {radar['snr']:.1f}<{SNR_MIN:.0f})" if radar else ""
                 fusion_lines.append(f"[Fusion] {inst:14} R~{est:5.2f}m | {da3_str} | "
-                                    f"est(DA3×{ratio:.2f}) | {r['state']}")
+                                    f"est(DA3×{ratio:.2f}){snr_note} | {r['state']}")
             else:
                 fusion_lines.append(f"[Fusion] {inst:14} miss      | {da3_str} | {r['state']}")
             overlay.append(o)
