@@ -17,9 +17,6 @@ WORKFLOW_PATH  = PROJECT_ROOT / "workflows" / "da3_depth.json"
 
 
 def _write_metric_vis(metric_npy: Path, png_path: Path, calib_path: Path):
-    """metric depth(미터, 멀수록 큰값) → 시각화 depth.png(near=bright 0~1 정규화)
-    + 뷰어 미터 역산용 depth_calib.json(metric_linear). 8bit PNG 가 미터를 못 담아
-    1m 넘으면 잘리는 문제를 정규화로 해결(거리값은 .npy 가 보존)."""
     m = np.load(str(metric_npy)).astype(np.float32)
     mn, mx = float(m.min()), float(m.max())
     vis = 1.0 - (m - mn) / (mx - mn + 1e-8)
@@ -56,11 +53,6 @@ def _wait(prompt_id):
 
 
 def generate_depth(input_path=None):
-    """background.jpg(기본) 또는 input_path 의 이미지로 DA3 depth → depth.png.
-
-    상태머신의 새 물체 DA3 재추론은 input_path 로 '현재 프레임'을 넘긴다(씬 배경
-    background.jpg 를 덮어쓰지 않기 위함). 출력은 항상 depth.png(현 씬 depth 갱신).
-    """
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     src = Path(input_path) if input_path else INPUT_PATH
     shutil.copy(src, COMFYUI_INPUT / "background.jpg")

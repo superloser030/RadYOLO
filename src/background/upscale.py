@@ -38,9 +38,6 @@ def _wait(prompt_id):
 
 
 def upscale_image(input_path=None, output_path=None):
-    """ESRGAN x4 → 1920x1080. 기본은 background_raw.jpg→background.jpg.
-    input/output 지정 시 임의 이미지 업스케일(상태머신 DA3 재추론이 현재 프레임을
-    배경과 '동일하게' ESRGAN 거치도록 재사용)."""
     src = Path(input_path)  if input_path  else INPUT_PATH
     dst = Path(output_path) if output_path else OUTPUT_PATH
     dst.parent.mkdir(parents=True, exist_ok=True)

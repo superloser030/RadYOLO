@@ -21,10 +21,6 @@ W_RADAR = 0.75
 
 
 def _best_object_snr(frame, result, targets, cam) -> float:
-    """이 프레임에서 레이더에 가장 또렷하게 잡힌 객체의 SNR(=신뢰도).
-
-    각 YOLO 객체 마스크에 레이더 점을 매칭(match_one)해, 매칭된 점들의 최대 SNR
-    중 가장 큰 값을 반환. 매칭 0이면 0. cam_w(1920) 좌표계로 bbox/mask 스케일."""
     if result.boxes is None or not targets:
         return 0.0
     h, w = frame.shape[:2]
@@ -48,7 +44,6 @@ def _best_object_snr(frame, result, targets, cam) -> float:
 
 
 def _boundary_sharpness(frame, result) -> float:
-    """YOLO 마스크 경계선 위 color gradient 평균 → 선명도 점수."""
     if result.masks is None or result.boxes is None:
         return 0.0
 

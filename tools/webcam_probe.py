@@ -1,11 +1,3 @@
-"""외장 웹캠(DSHOW idx0) 해상도별 fps probe — 노트북에서 실행.
-
-usage: python tools/webcam_probe.py
-
-외장 웹캠은 OpenCV 와 MJPG 협상이 안 돼 1080p 에서 YUY2 4fps 로 떨어진다.
-해상도를 낮추면 YUY2 여도 fps 가 오르므로(USB 대역폭), 각 해상도/포맷의
-실제 fps 를 측정해 sender 의 캡처 해상도를 결정한다.
-"""
 import cv2
 import time
 from pathlib import Path

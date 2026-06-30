@@ -23,7 +23,6 @@ YOLO_MODEL     = PROJECT_ROOT / "models" / "yolo11x-seg.pt"
 
 
 def _esrgan(src: Path, dst: Path):
-    """ComfyUI Real-ESRGAN x4 → 1920x1080 (upscale.py 헬퍼/워크플로 재사용)."""
     from src.background.upscale import _queue, _wait, COMFYUI_INPUT, COMFYUI_OUTPUT, ESRGAN_MODEL
     name = Path(src).name
     shutil.copy(src, COMFYUI_INPUT / name)
@@ -48,8 +47,6 @@ _depth_lock = threading.Lock()
 
 
 def _rerun_depth(bg_path: Path):
-    """background.jpg 갱신 후 DA3 재추론 + 보정계수 재적용 → depth.png.
-    비동기(daemon thread) — DynBG 루프 블로킹 없이 뷰어 포인트클라우드 갱신 신호 제공."""
     if not _depth_lock.acquire(blocking=False):
         return
     def _work():
@@ -91,8 +88,6 @@ def _upscale(src: Path, dst: Path, use_esrgan: bool):
 
 
 def _object_mask(yolo, img, dilate_px=0, conf=0.4):
-    """사람+사물 전부의 합집합 마스크(255=객체). img 와 같은 크기.
-    dilate_px>0 이면 마스크를 팽창 — 손가락/머리카락 등 빡빡한 경계 밖 잔상 제거."""
     h, w = img.shape[:2]
     res = yolo(img, verbose=False, conf=conf)[0]
     m = np.zeros((h, w), np.uint8)

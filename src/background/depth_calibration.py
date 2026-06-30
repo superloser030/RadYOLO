@@ -14,12 +14,6 @@ SYNC_WINDOW_MS = 1000
 
 
 def apply_calib(depth_norm, calib):
-    """raw DA3 depth_norm(0~1, 1=밝음=가까움) → 보정 corrected_norm(0~1, 1=가까움).
-
-    depth_calib.json 의 계수(a,b,range)를 재적용한다. 배경 보정(calibrate_depth)과
-    '같은' 계수로 새 프레임 DA3 depth 를 변환 → 새 물체 거리도 일관되게(상태머신의
-    새 물체 DA3 재추론에서 사용). 범위 밖은 clip.
-    """
     a, b = calib["a"], calib["b"]
     rmin, rmax = calib["range_min_m"], calib["range_max_m"]
     corrected = np.exp(a * depth_norm + b)

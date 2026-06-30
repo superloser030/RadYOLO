@@ -1,9 +1,3 @@
-"""
-수동 렌즈 왜곡 보정 도구
-왼쪽: 보정된 카메라 이미지
-오른쪽: depth.png 기반 top-down 포인트클라우드 (벽/바닥이 직선이 되면 OK)
-s: 저장 / q: 종료
-"""
 import cv2
 import numpy as np
 import json

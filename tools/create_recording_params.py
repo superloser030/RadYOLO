@@ -1,7 +1,3 @@
-"""
-AWR1642 RecordingParameters.mat 생성 스크립트.
-한 번만 실행하면 됨. data/radar/iqData_RecordingParameters.mat 에 저장.
-"""
 import scipy.io
 import numpy as np
 from pathlib import Path

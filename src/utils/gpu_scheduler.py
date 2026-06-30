@@ -1,15 +1,3 @@
-"""GPU 작업 스케줄러 — VRAM 경합 방지용 우선순위 큐 + 단일 워커.
-
-⚠ 아직 파이프라인에 연결되지 않은 골격(skeleton)이다.
-VRAM 무거운 작업이 늘어나면(실시간 메시 렌더링, 동적 배경 갱신 등) 기존 GPU
-작업(live YOLO, GigaPose 등)을 submit() 으로 통과시켜 GPU 를 직렬화한다.
-
-사용 예 (나중에):
-    from src.utils.gpu_scheduler import scheduler, Priority
-    scheduler.start()
-    fut = scheduler.submit(run_yolo, frame, priority=Priority.REALTIME)
-    result = fut.result()
-"""
 import queue
 import threading
 import itertools
@@ -18,7 +6,6 @@ from concurrent.futures import Future
 
 
 class Priority(IntEnum):
-    """숫자가 작을수록 먼저 실행."""
     REALTIME    = 0
     INTERACTIVE = 1
     BACKGROUND  = 2
@@ -26,11 +13,6 @@ class Priority(IntEnum):
 
 
 class GPUScheduler:
-    """GPU 작업을 단일 워커 스레드에서 우선순위 순으로 직렬 실행.
-
-    한 번에 하나의 작업만 GPU 를 점유하게 해 OOM/병목을 막고,
-    실시간 작업을 무거운 배치 작업보다 우선시킨다.
-    """
 
     def __init__(self):
         self._q       = queue.PriorityQueue()
@@ -49,7 +31,6 @@ class GPUScheduler:
         self._stop.set()
 
     def submit(self, fn, *args, priority: Priority = Priority.BACKGROUND, **kwargs) -> Future:
-        """GPU 작업 제출 → Future 반환. priority 숫자 작을수록 먼저 실행."""
         fut  = Future()
         item = (int(priority), next(self._counter), fn, args, kwargs, fut)
         self._q.put(item)
@@ -70,7 +51,6 @@ class GPUScheduler:
 
 
 def vram_free_mb():
-    """현재 GPU 여유 VRAM(MB). torch/CUDA 없으면 None."""
     try:
         import torch
         if torch.cuda.is_available():
@@ -82,13 +62,6 @@ def vram_free_mb():
 
 
 class GPUManager:
-    """GPU 메모리/모델 생명주기 일원화.
-
-    각 단계가 직접 torch.empty_cache()/ComfyUI free 를 호출하지 않고
-    여기로 모은다. "이 모델 다 썼어" → release() 한 줄이면 됨.
-      - 로컬 torch 모델(SAM2 등): del 후 release() → empty_cache
-      - ComfyUI(ESRGAN/DA3): release(comfyui=True) → /free API
-    """
     COMFYUI_URL = "http://127.0.0.1:8188"
 
     @staticmethod
@@ -102,12 +75,6 @@ class GPUManager:
 
     @classmethod
     def free_comfyui(cls):
-        """ComfyUI 본체 모델 언로드 + DA3 별도 프로세스 종료.
-
-        DA3(depthanythingv3-nodes)는 ComfyUI 와 다른 pixi env 의 독립 프로세스라
-        /free 가 못 미침. 실측상 ~6GB 를 잡고 있어 직접 종료한다.
-        (다음 depth 때 ComfyUI 가 DA3 노드를 다시 띄움)
-        """
         import json
         import urllib.request
         import subprocess
@@ -132,12 +99,6 @@ class GPUManager:
 
     @classmethod
     def release(cls, label="", comfyui=False):
-        """다 쓴 GPU 리소스 반환. torch 캐시 + (옵션)ComfyUI 언로드.
-
-        호출 예:
-          del sam2; GPUManager.release("SAM2")
-          GPUManager.release("ESRGAN/DA3", comfyui=True)
-        """
         if comfyui:
             cls.free_comfyui()
         cls.empty_cache()

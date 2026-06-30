@@ -27,7 +27,6 @@ def _load_sam2():
 
 
 def _build_gradient_map(img: np.ndarray, depth: np.ndarray):
-    """debug용: color(Lab) + depth gradient 시각화."""
     h, w = img.shape[:2]
 
     lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB).astype(np.float32)
@@ -141,12 +140,10 @@ def crop_objects():
 
 
 def load_sam2():
-    """SAM2 predictor 로드 — 상태머신 이벤트 루프가 lazy 로드/재사용."""
     return _load_sam2()
 
 
 def crop_one_extra(img, bbox, sam2):
-    """추가 뷰 cutout ndarray 반환 (디렉토리 생성 없음). SAM2 set_image는 호출자 책임."""
     h, w = img.shape[:2]
     x1, y1, x2, y2 = map(int, bbox)
     masks, _, _ = sam2.predict(
@@ -160,12 +157,6 @@ def crop_one_extra(img, bbox, sam2):
 
 
 def crop_one(img, bbox, class_name, tid, sam2):
-    """현재 프레임의 한 객체 → data/objects/<class>_<tid>/ (cutout/crop/mask/meta).
-
-    상태머신 MODELING 단계용(이벤트). crop_objects(배경 1장 배치)와 달리 현재 프레임의
-    특정 bbox 하나만 처리한다. sam2 는 set_image 된 predictor(호출자가 프레임마다
-    set_image 호출). bbox=(x1,y1,x2,y2). 반환: obj_dir(Path).
-    """
     h, w = img.shape[:2]
     x1, y1, x2, y2 = map(int, bbox)
     masks, scores, _ = sam2.predict(

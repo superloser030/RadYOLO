@@ -36,7 +36,6 @@ from src.objects.trellis_gen    import generate_3d
 
 
 def estimate_object_poses():
-    """GLB 모델이 있는 객체에 대해 GigaPose로 포즈 추정 후 pose.json + manifest.json 저장."""
     from src.objects.pose_estimator import prepare_templates, estimate_pose
 
     cam_cfg    = load_camera()
@@ -98,7 +97,6 @@ def estimate_object_poses():
 
 
 def _appearance(frame, bbox, m_frame):
-    """HSV 64-bin 색 히스토그램 — re-ID 외형 특징. 마스크 영역만 사용(없으면 bbox 전체)."""
     x1, y1, x2, y2 = int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])
     crop = frame[max(0, y1):max(1, y2), max(0, x1):max(1, x2)]
     if crop.size == 0:
@@ -117,11 +115,6 @@ def _appearance(frame, bbox, m_frame):
 
 def _try_reid(graveyard, cls, bbox, appearance, now,
               graveyard_ttl=120.0, hist_th=0.60):
-    """graveyard 에서 cls·위치·외형 매칭 → (tid, entry) or None.
-
-    위치: 중심거리 < bbox 폭 × 1.5.  외형: HSV 히스토그램 상관계수 ≥ hist_th.
-    점수 = 위치 40% + 외형 60% — 가중 합산 최고점 선택.
-    """
     bw  = max(1.0, bbox[2] - bbox[0])
     cx  = (bbox[0] + bbox[2]) / 2
     cy  = (bbox[1] + bbox[3]) / 2
@@ -148,7 +141,6 @@ def _try_reid(graveyard, cls, bbox, appearance, now,
 
 
 def _update_manifest():
-    """data/objects/ 스캔 → manifest.json 갱신 (뷰어가 어떤 오브젝트를 로드할지 결정)."""
     if not OBJECTS_DIR.exists():
         return
     manifest = []
@@ -170,7 +162,6 @@ def _update_manifest():
 
 
 def _save_to_db(od: Path, cls_name: str, appearance):
-    """GLB 완성 오브젝트를 영구 DB에 저장. 세션 간 재사용을 위해."""
     import uuid
     if appearance is None or not (od / "model_trellis.glb").exists():
         return
@@ -191,7 +182,6 @@ def _save_to_db(od: Path, cls_name: str, appearance):
 
 
 def _try_db_match(cls: str, appearance, threshold=0.65):
-    """DB에서 같은 클래스 + HSV 유사도 ≥ threshold 인 항목 검색 → Path or None."""
     if appearance is None or not DB_DIR.exists():
         return None
     best_path, best_score = None, -1.0
@@ -218,7 +208,6 @@ def _try_db_match(cls: str, appearance, threshold=0.65):
 
 
 def _restore_from_db(db_entry: Path, cls_name: str, tid: int) -> Path:
-    """DB 항목을 data/objects/<cls>_<tid>/ 로 복사 후 경로 반환."""
     od = OBJECTS_DIR / f"{cls_name}_{tid}"
     od.mkdir(parents=True, exist_ok=True)
     shutil.copy2(str(db_entry / "model_trellis.glb"), str(od / "model_trellis.glb"))
@@ -232,7 +221,6 @@ def _restore_from_db(db_entry: Path, cls_name: str, tid: int) -> Path:
 
 
 def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
-    """백그라운드 스레드: GigaPose 추론 → pose.json 갱신 (회전/깊이)."""
     from src.objects.pose_estimator import estimate_pose
     template_dir = str(obj_dir / "templates")
     if not (obj_dir / "templates" / "meta.json").exists():
@@ -251,12 +239,6 @@ def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
 
 
 def live_update_loop(cam_cfg, enable_pose=True):
-    """라이브 상태머신: YOLO-seg 추적 + 레이더거리 + 객체 상태(NEW→MODELING→READY).
-
-    1단계: 단일뷰, re-ID 없음(IoU+miss 추적). crop/3D/pose 를 이벤트화 — 새 물체가
-    obj_conf 로 등록되고 model_conf 를 넘으면 DA3 재추론(거리)+crop+fal.ai 3D(백그라운드)
-    → READY 시 GigaPose pose. enable_pose=False 면 추적/거리만(3D/pose 안 함).
-    """
     import time, cv2
     import numpy as np
     from ultralytics import YOLO
@@ -315,24 +297,23 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _da3_lock  = threading.Lock()
     _da3_last  = [0.0]
 
-    _ERODE_K = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25))
+    ERODE_FRAC = 0.15
 
     def _erode_vals(arr, m_frame):
-        """마스크를 침식해 경계 픽셀(인접 물체/배경 오염) 제거 후 그 영역 depth 값.
-        너무 깎여 비면(작은 물체) 원본 마스크로 폴백."""
         h, w = arr.shape[:2]
         mm = cv2.resize(m_frame, (w, h)) if (h, w) != m_frame.shape else m_frame
         mmb = (mm > 0.5).astype(np.uint8)
-        er  = cv2.erode(mmb, _ERODE_K)
+        ys, xs = np.where(mmb > 0)
+        if len(xs) == 0:
+            return arr[mmb > 0]
+        side = min(xs.max() - xs.min() + 1, ys.max() - ys.min() + 1)
+        er_px = max(1, int(side * ERODE_FRAC))
+        k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * er_px + 1, 2 * er_px + 1))
+        er = cv2.erode(mmb, k)
         sel = er if er.any() else mmb
         return arr[sel > 0]
 
     def _mask_dist(m_frame, cx, cy):
-        """마스크 영역 DA3 거리 median(m). 마스크 없으면 (cx,cy) 1점. depth 없으면 None.
-
-        마스크는 침식(보수적)해서 경계의 인접 물체/배경 픽셀 오염을 막는다 — 겹친
-        물체 경계에서 median 이 출렁이던 문제 방지.
-        metric(Raw) 미터맵이 있으면 그 값을 미터로 직접 사용(보정/log역산 우회)."""
         met = _depth_metric[0]
         if met is not None:
             dh, dw = met.shape[:2]
@@ -356,10 +337,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
         return depth_to_range(dep[by, bx] / 255.0, cal)
 
     def _da3_rerun(frame_raw):
-        """라이브 DA3 재추론: 현재 프레임(1920) → DA3 직행 (ESRGAN 생략).
-        ESRGAN(x4)이 Trellis/pose 와 GPU 경합해 75초까지 튀어 5초 주기가 막혔다.
-        DA3 자체는 1초 내라, 라이브 metric(거리용)은 ESRGAN 없이 보간 1920 으로 충분.
-        배경 depth(background.jpg)는 여전히 ESRGAN 경로 유지 — 라이브 재추론만 경량화."""
         try:
             raw = SCENE / "da3_raw.jpg"
             cv2.imwrite(str(raw), frame_raw)
@@ -379,8 +356,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
             print(f"[State] DA3 재추론 실패: {e}")
 
     def _da3_rerun_shared(frame_big):
-        """동시 MODELING 여러 개여도 DA3 재추론 1회만(락 + 7초 디바운스). depth 는 전체
-        프레임이라 객체마다 돌릴 필요 없음 → 중복/충돌 방지."""
         if not _da3_lock.acquire(blocking=False):
             return
         try:
@@ -676,7 +651,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
 
 
 def _start_iperf_server():
-    """센더 mode 1(자동 대역폭) 측정용 iperf3 -s 상시 서버. iperf3 없으면 None."""
     try:
         proc = subprocess.Popen(
             ["iperf3", "-s"],
@@ -689,13 +663,6 @@ def _start_iperf_server():
 
 
 def _start_matlab_cfar():
-    """레이더 실시간 추적(radar_live.m)을 MATLAB 배치로 자동 실행.
-
-    예제 모듈 조립 파이프라인(readRadarCube→…→trackObjects). 옛 cfar_detect_live.m
-    은 legacy_matlab/ 으로 archive 됨.
-    .mat 생성(메타 수신) 후에 호출할 것. 출력은 logs/radar_live_*.log 로.
-    matlab 명령이 PATH 에 없으면 None (수동 실행 필요).
-    """
     import datetime as _dt
     matlab_dir = PROJECT_ROOT / "matlab"
     log_dir = PROJECT_ROOT / "logs"
@@ -715,7 +682,6 @@ def _start_matlab_cfar():
 
 
 def _verify_intake(secs=3.0):
-    """레이더 targets + 웹캠 프레임이 실제로 들어오는지 secs 초 확인(형식 검증)."""
     import time as _t
     targets_path = PROJECT_ROOT / "data" / "radar" / "targets.json"
     t0 = _t.time(); got_cam = got_radar = False
@@ -737,7 +703,6 @@ def _verify_intake(secs=3.0):
 
 
 class _ViewerHandler(http.server.SimpleHTTPRequestHandler):
-    """정적 파일 + /stream (실시간 웹캠 MJPEG)."""
     def do_GET(self):
         if self.path == "/stream":
             self._mjpeg()

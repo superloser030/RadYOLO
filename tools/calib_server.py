@@ -1,8 +1,3 @@
-"""
-렌즈 보정 웹 서버
-python tools/calib_server.py
-→ http://localhost:8765/tools/calib_web.html
-"""
 import json
 import threading
 import webbrowser

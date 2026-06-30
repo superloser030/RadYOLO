@@ -1,21 +1,3 @@
-"""레이더↔카메라 외부 캘리브(yaw + baseline) 추정 루프.
-
-main_r.py --calib 모드에서 백그라운드 스레드로 실행한다. live_overlay.json
-(YOLO bbox + 레이더 az)을 폴링해 카메라가 본 방위각(az_cam)과 레이더 방위각
-(az_radar)이 맞도록 yaw 를 추정하고, config/calib_radar_cam.json 에 저장한다
-(radar_fusion 이 자동 로드). 장비(코너 리플렉터) 없이 돌아가는 시스템만으로.
-
-yaw-only: baseline(tx,tz)은 레이더 az noise(빔폭 ±15°)로 과적합돼 실행마다
-4~5배 출렁여 신뢰 불가라 0 으로 고정한다. yaw 만 robust median 으로 추정
-(레이더·카메라가 거의 같은 위치라 baseline 영향도 작음).
-
-coarse-to-fine: near(≤2m, 중앙)에서 yaw 수렴 → fine(≤6m)에서 먼 거리로 검증.
-
-표본 자동 선택(cls 무관): 한 프레임에서 ① 강반사(n≥MIN_N)이고 ② 다른 물체와
-같은 (range,az) 셀을 공유하지 않는(=분리된) 물체만 채택한다. 셀을 공유하면
-한 레이더 반사가 여러 마스크에 샌 누수/중복이라 주인이 모호 → 통째 제외.
-사람·물체 구분 없이 '그 순간 깨끗하게 분리된 강반사'만 yaw 추정에 쓴다.
-"""
 import json
 import math
 import time
@@ -41,7 +23,6 @@ DUP_DAZ      = 3.0
 
 
 def _residuals(params, az_cam, az_rad, rng):
-    """[yaw,tx,tz] 로 레이더점을 카메라 az 로 투영한 예측과 관측의 차(도)."""
     yaw, tx, tz = params
     yawr = math.radians(yaw)
     azr  = np.radians(az_rad)
@@ -61,8 +42,6 @@ def _read_overlay():
 
 
 def calibrate_loop(cam, shutdown_event=None):
-    """live_overlay 를 폴링하며 yaw/baseline 추정 → calib_radar_cam.json 저장.
-    shutdown_event 가 set 되면 종료(없으면 무한). main_r --calib 스레드에서 호출."""
     fx, cx = cam["fx"], cam["cx"]
     print(f"[Calib] 외부 캘리브 시작 — 물체를 가까이(1~2m) 중앙에서 좌우로 움직이세요.")
 

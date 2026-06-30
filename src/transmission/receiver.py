@@ -60,7 +60,6 @@ _webcam_lock      = threading.Lock()
 
 
 def _write_webcam_frame(jpeg_bytes: bytes, ts_ms: int):
-    """수신한 JPEG 바이트를 재인코딩 없이 그대로 저장 + 타임스탬프 기록."""
     global _webcam_frame_idx, _webcam_ts_file
     _WEBCAM_DIR.mkdir(parents=True, exist_ok=True)
     if _webcam_ts_file is None:
@@ -115,19 +114,16 @@ def _ms_to_timestr(ms: int) -> str:
 
 
 def get_latest_frame():
-    """라이브 루프용: 가장 최근 수신 프레임 반환 (None이면 아직 수신 안됨)"""
     with _latest_frame_lock:
         return _latest_frame
 
 
 def get_latest_frame_ts() -> int:
-    """가장 최근 웹캠 프레임의 타임스탬프 (ms since midnight, sender 시계 기준)"""
     with _latest_frame_lock:
         return _latest_frame_ts
 
 
 def get_latest_radar():
-    """가장 최근 레이더 패킷: (payload_bytes, ts_ms) 또는 None"""
     with _latest_radar_lock:
         return _latest_radar
 
@@ -221,7 +217,6 @@ def webcam_receive():
 
 
 def set_chirp(num_chirps: int, samples_per_chirp: int = 256, num_receivers: int = 4):
-    """chirp 수 변경에 맞춰 .bin 프레임 크기 갱신 (samples×rx×chirp×4byte)."""
     global _BIN_FRAME_SIZE
     _BIN_FRAME_SIZE = samples_per_chirp * num_receivers * num_chirps * 4
     _chirp_ready.set()
@@ -229,7 +224,6 @@ def set_chirp(num_chirps: int, samples_per_chirp: int = 256, num_receivers: int 
 
 
 def _write_mat(meta: dict):
-    """센더 메타로 iqData_RecordingParameters.mat 생성 (MATLAB dca1000FileReader 용)."""
     import scipy.io as sio
     _RADAR_DIR.mkdir(parents=True, exist_ok=True)
     rp = {
@@ -250,10 +244,6 @@ _last_meta = None
 
 
 def meta_receive():
-    """센더가 보낸 레벨 메타(TCP)를 받아 .mat 생성 + .bin 프레임 크기 갱신.
-
-    센더는 메타를 주기적으로 재전송하므로, 값이 직전과 같으면 무시한다.
-    """
     global _last_meta
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

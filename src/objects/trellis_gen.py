@@ -1,7 +1,3 @@
-"""
-fal.ai Trellis 3D 생성
-cutout.jpg (흰 배경 오브젝트) → model_trellis.glb
-"""
 import os
 import urllib.request
 from pathlib import Path
@@ -20,12 +16,6 @@ def _load_env():
 
 
 def generate_3d(obj_dir: Path, extra_cutouts=None) -> bool:
-    """cutout.jpg (+ 선택적 extra_cutouts) → fal.ai Trellis → model_trellis.glb.
-
-    extra_cutouts: [Path, ...] — 추가 뷰 cutout 경로 목록.
-      - 없거나 비어 있으면 단일뷰 fal-ai/trellis
-      - 있으면 멀티뷰 fal-ai/trellis/multi (image_urls 배열)
-    """
     _load_env()
 
     cutout = obj_dir / "cutout.jpg"

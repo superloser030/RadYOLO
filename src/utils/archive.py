@@ -39,7 +39,6 @@ def start_heartbeat_thread():
 
 
 def _save_preserved(archive_base: Path) -> dict:
-    """model_trellis.glb / templates/ / iqData_RecordingParameters.mat 를 임시 위치에 보존."""
     saved = {}
 
     objects_dir = _DATA_DIR / "objects"
@@ -66,7 +65,6 @@ def _save_preserved(archive_base: Path) -> dict:
 
 
 def _restore_preserved(saved: dict):
-    """보존했던 파일들을 data/ 로 복원."""
     if not saved:
         return
     new_objects = _DATA_DIR / "objects"
@@ -89,9 +87,6 @@ def _restore_preserved(saved: dict):
 
 
 def archive_data():
-    """이전 세션 data/ 내용을 archive/YYYYMMDD_HHMM~HHMM/ 으로 이동.
-    model_trellis.glb 와 templates/ 는 이동 후 복원.
-    """
     _SESSION_FILES = {_F_START.name, _F_END.name, _F_HB.name}
     _ARCHIVE_DIR.mkdir(exist_ok=True)
 

@@ -41,7 +41,6 @@ RADAR_CFG      = DCA_ROOT / "config" / "awr1642_raw_data.cfg"
 
 
 def _ts_ms():
-    """자정 기준 밀리초 (uint32, 4바이트)."""
     n = datetime.datetime.now()
     return (n.hour * 3600 + n.minute * 60 + n.second) * 1000 + n.microsecond // 1000
 
@@ -86,11 +85,6 @@ def monitor_record_proc(proc):
 
 
 def _send_and_wait(ser, command, timeout=2.0):
-    """명령 전송 후 프롬프트(mmwDemo:/>)가 올 때까지 대기. 응답 문자열 반환.
-
-    'Done' 에서 끊으면 뒤따르는 프롬프트가 다음 명령으로 밀려 응답 정렬이
-    어긋난다(partial config 유발). 프롬프트까지 완전히 읽어 다음 명령과 분리.
-    """
     ser.reset_input_buffer()
     ser.write((command + '\r\n').encode('utf-8'))
     deadline = time.time() + timeout
@@ -107,7 +101,6 @@ def _send_and_wait(ser, command, timeout=2.0):
 
 
 def _resp_status(resp: str) -> str:
-    """응답에서 Done/Error 상태만 추출 (마지막 줄은 항상 프롬프트라 무의미)."""
     if "Error" in resp:
         return next((l.strip() for l in resp.splitlines() if "Error" in l), "Error")
     if "Done" in resp:
@@ -124,12 +117,6 @@ def uart_send_commands(commands):
 
 
 def send_radar_config(num_loops, frame_period_ms):
-    """레벨에 맞춰 .cfg 의 frameCfg(numLoops, framePeriodicity)를 동적 수정 후 UART 전송.
-
-    frameCfg <chirpStartIdx> <chirpEndIdx> <numLoops> <numFrames>
-             <framePeriodicity(ms)> <triggerSelect> <frameTriggerDelay>
-    framePeriodicity 단위는 ms (10fps=100ms).
-    """
     import serial
     print(f"[UART] {CLI_PORT} 연결 중...")
     with serial.Serial(CLI_PORT, CLI_BAUD, timeout=0.3) as ser:
@@ -153,11 +140,6 @@ def send_radar_config(num_loops, frame_period_ms):
 
 
 def send_meta(level: dict) -> bool:
-    """레벨 메타를 데스크톱(META_PORT)으로 TCP 전송. 성공 시 True.
-
-    데스크톱은 이 값으로 iqData_RecordingParameters.mat 의 NumChirps 와
-    .bin 프레임 크기를 맞춘다.
-    """
     meta = {
         "ADCSampleRate":   _radar["adc_sample_rate"],
         "SweepSlope":      _radar["sweep_slope"],
@@ -177,11 +159,6 @@ def send_meta(level: dict) -> bool:
 
 
 def meta_sender_loop(level: dict):
-    """메타를 주기적으로 재전송 (백그라운드).
-
-    데스크톱이 도중에 재시작돼도 자동 복구.
-    대기 중: 3초 간격 / 전달 후: 10초 간격 유지.
-    """
     sent = False
     while True:
         if send_meta(level):
@@ -348,10 +325,6 @@ def webcam_send(fps, quality, width, height):
 
 
 def measure_bandwidth_mbps():
-    """iperf3 -c 로 데스크톱까지 상행(uplink) 대역폭 측정. 실패 시 0.0 반환.
-
-    데스크톱(main_r.py)이 iperf3 -s 를 상시 띄워두어야 함.
-    """
     try:
         out = subprocess.run(
             ["iperf3", "-c", DESKTOP_IP, "-t", "3", "-J"],
@@ -375,7 +348,6 @@ def measure_bandwidth_mbps():
 
 
 def select_level():
-    """모드에 따라 사용할 레벨 dict 결정."""
     mode   = _sender["mode"]
     levels = _sender["level"]
 
@@ -398,10 +370,6 @@ def select_level():
 
 
 def run(transmit_mode: int):
-    """송신 진입점.
-
-    transmit_mode: 0 = 웹캠만, 1 = 레이더 + 웹캠
-    """
     global _active_level, RESTART_AT_SEQ
     lv = select_level()
     _active_level  = lv
