@@ -14,7 +14,7 @@ import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 OBJECTS_DIR  = PROJECT_ROOT / "data" / "objects"
-DB_DIR       = PROJECT_ROOT / "db"   # 세션 간 영구 오브젝트 DB (archive 대상 아님)
+DB_DIR       = PROJECT_ROOT / "db"
 
 from src.utils.archive import (
     archive_data,
@@ -72,7 +72,7 @@ def estimate_object_poses():
         print(f"\n=== Pose: {obj_dir.name} ===")
         prepare_templates(str(mesh_path), template_dir)
 
-        bbox = meta.get("bbox")   # [cx1, cy1, cx2, cy2] in original image
+        bbox = meta.get("bbox")
         if bbox is None:
             manifest.append(entry)
             continue
@@ -135,7 +135,7 @@ def _try_reid(graveyard, cls, bbox, appearance, now,
         if dist_norm > 1.5:
             continue
         pos_score  = max(0.0, 1.0 - dist_norm / 1.5)
-        hist_score = 0.5   # 외형 특징 없을 때 중립값
+        hist_score = 0.5
         if appearance is not None and g.get("appearance") is not None:
             hist_score = max(0.0, float(cv2.compareHist(
                 appearance, g["appearance"], cv2.HISTCMP_CORREL)))
@@ -273,23 +273,21 @@ def live_update_loop(cam_cfg, enable_pose=True):
     SCENE        = PROJECT_ROOT / "data" / "scene"
     DEPTH_PATH   = SCENE / "depth.png"
     CALIB_PATH   = SCENE / "depth_calib.json"
-    METRIC_PATH  = SCENE / "depth_metric.npy"   # DA3 metric(Raw) 미터맵 — 있으면 보정 우회
+    METRIC_PATH  = SCENE / "depth_metric.npy"
     OBJECTS_DIR  = PROJECT_ROOT / "data" / "objects"
-    DA3_INPUT    = SCENE / "da3_frame.jpg"   # 새 물체 DA3 재추론 입력(배경 안 건드림)
+    DA3_INPUT    = SCENE / "da3_frame.jpg"
 
     ycfg        = load_receiver().get("yolo", {})
-    obj_conf    = float(ycfg.get("obj_conf",   0.72))   # 객체 등록 게이트
-    model_conf  = float(ycfg.get("model_conf", 0.85))   # 3D+pose 게이트
+    obj_conf    = float(ycfg.get("obj_conf",   0.72))
+    model_conf  = float(ycfg.get("model_conf", 0.85))
     live_conf   = float(ycfg.get("live_conf",  0.5))
-    detect_conf = min(live_conf, obj_conf)   # 검출은 낮게(추적 안정), 등록만 obj_conf
+    detect_conf = min(live_conf, obj_conf)
 
-    # 배경 depth + 보정계수 — 새 물체 DA3 재추론에 같은 계수 재적용. 리스트로 nonlocal 흉내.
-    # _depth_metric: DA3 metric(Raw) 미터맵. 있으면 PNG+calib 대신 이걸 미터로 직접 사용.
     _depth = [None]; _depth_calib = [None]; _depth_metric = [None]
     def _reload_depth():
         try:
             if METRIC_PATH.exists():
-                _depth_metric[0] = np.load(str(METRIC_PATH))   # [H,W] 미터
+                _depth_metric[0] = np.load(str(METRIC_PATH))
             if DEPTH_PATH.exists() and CALIB_PATH.exists():
                 d = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
                 if d is not None and d.ndim != 2:
@@ -313,11 +311,11 @@ def live_update_loop(cam_cfg, enable_pose=True):
             print("[State] SAM2 lazy 로드...")
             _sam2[0] = load_sam2()
         return _sam2[0]
-    _sam2_lock = threading.Lock()   # SAM2 단일 인스턴스 동시 호출 직렬화
-    _da3_lock  = threading.Lock()   # DA3 재추론 공유(동시 MODELING 시 1회만)
+    _sam2_lock = threading.Lock()
+    _da3_lock  = threading.Lock()
     _da3_last  = [0.0]
 
-    _ERODE_K = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25))   # 마스크 침식(보수적)
+    _ERODE_K = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25))
 
     def _erode_vals(arr, m_frame):
         """마스크를 침식해 경계 픽셀(인접 물체/배경 오염) 제거 후 그 영역 depth 값.
@@ -364,10 +362,8 @@ def live_update_loop(cam_cfg, enable_pose=True):
         배경 depth(background.jpg)는 여전히 ESRGAN 경로 유지 — 라이브 재추론만 경량화."""
         try:
             raw = SCENE / "da3_raw.jpg"
-            cv2.imwrite(str(raw), frame_raw)         # frame_raw 는 이미 cam_w(1920)
-            generate_depth(input_path=str(raw))      # ESRGAN 생략, DA3 직행
-            # metric(Raw) 모드면 generate_depth 가 시각화 depth.png 를 이미 만들었고
-            # 거리는 .npy 라 log calib 불필요 → 스킵. 아니면 기존 log_linear 보정.
+            cv2.imwrite(str(raw), frame_raw)
+            generate_depth(input_path=str(raw))
             if not METRIC_PATH.exists():
                 cal = _depth_calib[0]
                 if cal is not None:
@@ -386,29 +382,28 @@ def live_update_loop(cam_cfg, enable_pose=True):
         """동시 MODELING 여러 개여도 DA3 재추론 1회만(락 + 7초 디바운스). depth 는 전체
         프레임이라 객체마다 돌릴 필요 없음 → 중복/충돌 방지."""
         if not _da3_lock.acquire(blocking=False):
-            return                          # 이미 누가 재추론 중 → 공유(스킵)
+            return
         try:
             if time.time() - _da3_last[0] < 7.0:
-                return                      # 최근 7초 내 했으면 재사용
+                return
             _da3_rerun(frame_big)
             _da3_last[0] = time.time()
         finally:
             _da3_lock.release()
 
-    registry  = {}      # tid -> {cls,bbox,conf,miss,state,glb,appearance,ratio,da3_0}
-    graveyard = {}      # tid -> {…, evicted_at} — re-ID 대기 (TTL 내 재등록 시 같은 tid 재사용)
-    _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
+    registry  = {}
+    graveyard = {}
+    _busy     = {}
     _next_tid = [0]
     MISS_MAX, IOU_TH = 10, 0.15
-    GRAVEYARD_TTL  = 120.0   # 120초 후 graveyard 에서 영구 삭제
-    MIN_VIEWS      = 3        # COLLECTING → MODELING 최소 뷰 수
-    COLLECT_TIMEOUT = 30.0    # 30초 경과 시 보유 뷰로 강제 진입
-    MOVE_TH        = 0.30     # bbox폭 대비 중심이동 임계값
+    GRAVEYARD_TTL  = 120.0
+    MIN_VIEWS      = 3
+    COLLECT_TIMEOUT = 30.0
+    MOVE_TH        = 0.30
     _last_fusion = 0.0
-    _da3_scale   = [3.0]      # 전역 R/DA3 비율(median) — 미잡힌 객체 fallback. 초기 3.0
-                              #   (metric DA3 가 대략 ×3 과소). 실측 누적되면 갱신.
-    _prev_da3_ts = [0.0]      # DA3 재추론 완료 감지용(da3_0 리셋 트리거)
-    SNR_MIN      = 4.0        # 레이더 신뢰 임계 — 이 미만은 실측 무시, DA3×비율 추정 사용
+    _da3_scale   = [3.0]
+    _prev_da3_ts = [0.0]
+    SNR_MIN      = 4.0
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -425,7 +420,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
         results = yolo(frame, verbose=False, conf=detect_conf)
         masks = results[0].masks
 
-        # ── 1. 검출 정리 (마스크 tight bbox + DA3 거리) ──
         dets = []
         for i in range(len(results[0].boxes)):
             box  = results[0].boxes[i]
@@ -449,7 +443,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
                          "appearance": _appearance(frame, mbbox, m_frame),
                          "cx": (mbbox[0]+mbbox[2])/2, "cy": (mbbox[1]+mbbox[3])/2, "tid": None})
 
-        # ── 2. IoU+중심 매칭 → registry 갱신/등록 (re-ID 는 2단계) ──
         matched = set()
         for d in dets:
             bw = max(1.0, d["bbox"][2] - d["bbox"][0])
@@ -468,7 +461,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 r = registry[best_tid]
                 r["bbox"] = d["bbox"]; r["conf"] = max(r["conf"], d["conf"]); r["miss"] = 0
                 r["appearance"] = d["appearance"]
-            elif d["conf"] >= obj_conf:   # 새 객체는 obj_conf 통과 시만 등록
+            elif d["conf"] >= obj_conf:
                 reid = _try_reid(graveyard, d["name"], d["bbox"], d["appearance"],
                                  time.time(), GRAVEYARD_TTL)
                 if reid:
@@ -476,7 +469,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     del graveyard[rtid]
                     st = rentry.get("state", "NEW")
                     if st == "MODELING":
-                        st = "NEW"   # MODELING 스레드는 이미 종료됨
+                        st = "NEW"
                     d["tid"] = rtid; matched.add(rtid)
                     registry[rtid] = {**rentry, "bbox": d["bbox"], "conf": d["conf"],
                                       "miss": 0, "state": st, "appearance": d["appearance"]}
@@ -500,7 +493,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
                                          "miss": 0, "state": "NEW", "glb": None,
                                          "appearance": d["appearance"]}
 
-        # 미매칭 registry: miss++ → graveyard 이동 (re-ID 대기)
         for tid in list(registry):
             if tid not in matched:
                 registry[tid]["miss"] += 1
@@ -511,26 +503,19 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     _busy.pop(tid, None); _busy.pop(f"pose{tid}", None)
                     print(f"[State] {entry['cls']}_{tid} → graveyard")
 
-        # ── 3. 거리 매칭 + overlay + 상태 전이 ──
         det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
 
-        # DA3 metric 을 7초마다 현재 프레임으로 재추론(백그라운드) → depth_metric 갱신.
-        # 정적 snapshot 이라 물체가 움직이면 위치 depth 가 안 맞으므로 주기적으로 새로 찍는다.
         if time.time() - _da3_last[0] >= 7.0:
             _fb = cv2.resize(frame, (cam_w, cam_h), interpolation=cv2.INTER_LINEAR)
             threading.Thread(target=_da3_rerun_shared, args=(_fb,), daemon=True).start()
-        # 재추론 완료(_da3_last 변화) → 모든 da3_0 리셋 → 새 depth 위치값으로 재설정
         if _da3_last[0] != _prev_da3_ts[0]:
             _prev_da3_ts[0] = _da3_last[0]
             for _tid in registry:
                 registry[_tid]["da3_0"] = None
 
-        # DA3 는 정적 snapshot 이라 물체가 움직이면 그 위치 depth 가 안 맞는다.
-        # → 객체별 DA3 값을 고정 기억(da3_0); 5초 재추론 때마다 리셋되어 갱신된다.
         for tid, d in det_by_tid.items():
             if tid in registry and registry[tid].get("da3_0") is None and d.get("mdist"):
                 registry[tid]["da3_0"] = round(float(d["mdist"]), 3)
-        # expected = da3_0×비율(예상 미터거리). 겹침 시 점을 예상거리 최근접 객체에 배정.
         match_objs   = []
         for tid, d in det_by_tid.items():
             if tid not in registry:
@@ -541,17 +526,13 @@ def live_update_loop(cam_cfg, enable_pose=True):
                                "mask": d["m_frame"], "da3": da3, "expected": exp})
         radar_by_tid = match_all(targets, match_objs, cam_cfg)
 
-        # 객체별 R/DA3 비율 EMA 갱신 (레이더 실측 n>0). metric DA3 는 비선형 압축이라
-        # 객체마다 비율이 다르므로(가까운 ~3, 먼 ~12) 객체별로 자기 비율을 기억한다.
         for t in radar_by_tid:
             rd = radar_by_tid[t]
             da3_0 = registry[t].get("da3_0") if t in registry else None
-            # 신뢰 실측(snr>=SNR_MIN)만 비율 학습 — 약검출이 비율 오염시키는 것 방지
             if rd and rd["n_points"] > 0 and rd.get("snr", 0) >= SNR_MIN and da3_0 and da3_0 > 0.05:
                 ratio = rd["range_m"] / da3_0
                 old = registry[t].get("ratio")
                 registry[t]["ratio"] = 0.7 * old + 0.3 * ratio if old else ratio
-        # 전역 평균 비율(한 번도 레이더에 안 잡힌 객체 fallback) — outlier robust median
         all_ratios = [registry[t]["ratio"] for t in registry if registry[t].get("ratio")]
         if all_ratios:
             _da3_scale[0] = float(np.median(all_ratios))
@@ -560,17 +541,16 @@ def live_update_loop(cam_cfg, enable_pose=True):
         for tid, r in list(registry.items()):
             d = det_by_tid.get(tid)
             if d is None:
-                continue   # 이번 프레임 미검출(miss 중)
+                continue
             inst = f"{r['cls']}_{tid}"
             radar = radar_by_tid.get(tid)
-            da3 = r.get("da3_0")   # 객체 첫 DA3 고정값(m) — 비교 표시 + 게이트용
+            da3 = r.get("da3_0")
             o = {"name": inst, "cls": r["cls"], "conf": round(r["conf"], 2),
                  "bbox": [round(v) for v in r["bbox"]], "state": r["state"]}
             if da3 is not None:
                 o["da3_m"] = round(float(da3), 2)
             da3_str = f"DA3 {da3:5.2f}m" if da3 is not None else "DA3  --  "
             if radar and radar.get("snr", 0) >= SNR_MIN:
-                # 신뢰할 만한 레이더 실측(snr>=SNR_MIN)
                 o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
                 o["snr"] = radar.get("snr")
@@ -578,8 +558,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
                                     f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
                                     f"snr {radar.get('snr', 0):5.1f} | {r['state']}")
             elif da3 is not None and (r.get("ratio") or _da3_scale[0] > 0):
-                # 레이더 미검출 or 신뢰 낮음(snr<SNR_MIN) → DA3×비율 추정치.
-                # 자기 비율 우선(정지물체 안정), 없으면 전역 평균 비율. (n=0, est)
                 ratio = r.get("ratio") or _da3_scale[0]
                 est = da3 * ratio
                 o["range_m"] = round(est, 2); o["n"] = 0; o["est"] = True
@@ -592,7 +570,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
 
             if not enable_pose:
                 continue
-            # NEW →(model_conf)→ COLLECTING: 멀티뷰 수집 시작
             if (r["state"] == "NEW" and r["conf"] >= model_conf
                     and r["cls"] not in SKIP_CLASSES):
                 r["state"] = "COLLECTING"
@@ -602,7 +579,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 (od / "views").mkdir(parents=True, exist_ok=True)
                 print(f"[State] {r['cls']}_{tid} NEW → COLLECTING")
 
-            # COLLECTING: 움직임 감지 시 뷰 저장 → 조건 충족 시 MODELING 진입
             elif r["state"] == "COLLECTING" and d is not None and not _busy.get(tid):
                 bw = max(1.0, r["bbox"][2] - r["bbox"][0])
                 lcx, lcy = r.get("last_view_cx"), r.get("last_view_cy")
@@ -617,14 +593,12 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     r["last_view_cx"] = d["cx"]; r["last_view_cy"] = d["cy"]
                     print(f"[Collect] {r['cls']}_{tid} view #{len(r['views'])}")
                 elapsed = time.time() - r.get("collect_start", time.time())
-                # 타임아웃 + 뷰 없음 → 현재 프레임 단일뷰로 강제 저장
                 if elapsed > COLLECT_TIMEOUT and not r["views"] and d["m_frame"] is not None:
                     od = OBJECTS_DIR / f"{r['cls']}_{tid}"
                     vp = od / "views" / "view_000.jpg"
                     cv2.imwrite(str(vp), cv2.resize(frame, (cam_w, cam_h)))
                     r["views"].append({"cx": d["cx"], "cy": d["cy"],
                                        "bbox": list(r["bbox"]), "path": str(vp)})
-                # 충분한 뷰 또는 타임아웃 → MODELING
                 if r["views"] and (len(r["views"]) >= MIN_VIEWS or elapsed > COLLECT_TIMEOUT):
                     _busy[tid] = True; r["state"] = "MODELING"
                     raw = frame.copy(); views = list(r["views"]); cls_name = r["cls"]
@@ -635,11 +609,9 @@ def live_update_loop(cam_cfg, enable_pose=True):
                             extra_cutouts = []
                             with _sam2_lock:
                                 sam = _get_sam2()
-                                # 첫 번째 뷰 → main cutout (obj_dir 구조 생성)
                                 f0 = cv2.imread(views[0]["path"])
                                 sam.set_image(cv2.cvtColor(f0, cv2.COLOR_BGR2RGB))
                                 crop_one(f0, views[0]["bbox"], cls_name, tid, sam)
-                                # 추가 뷰 → views/ 디렉토리에 cutout 저장
                                 for i, v in enumerate(views[1:], 1):
                                     vf = cv2.imread(v["path"])
                                     if vf is None:
@@ -666,7 +638,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
                             _busy[tid] = False
                     threading.Thread(target=_model_bg, daemon=True).start()
 
-            # READY → GigaPose pose (백그라운드)
             elif (r["state"] == "READY"
                   and not _busy.get(f"pose{tid}")
                   and time.time() >= r.get("pose_retry_at", 0)):
@@ -698,7 +669,6 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 print(ln)
             _last_fusion = now
 
-        # graveyard TTL 정리
         for _tid in [k for k, v in graveyard.items() if now - v["evicted_at"] > GRAVEYARD_TTL]:
             del graveyard[_tid]
 
@@ -728,7 +698,6 @@ def _start_matlab_cfar():
     """
     import datetime as _dt
     matlab_dir = PROJECT_ROOT / "matlab"
-    # 로그는 data/ 밖(logs/)에 타임스탬프로 — archive 이동/좀비 잠금과 무관하게
     log_dir = PROJECT_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)
     log_path = log_dir / f"radar_live_{_dt.datetime.now():%H%M%S}.log"
@@ -797,19 +766,15 @@ class _ViewerHandler(http.server.SimpleHTTPRequestHandler):
                 self.wfile.write(b"\r\n")
             except (BrokenPipeError, ConnectionResetError):
                 break
-            _t.sleep(0.1)   # ~10fps
+            _t.sleep(0.1)
 
-    def log_message(self, *args):   # 폴링/스트림 로그 도배 방지
+    def log_message(self, *args):
         pass
 
 
 def _start_viewer(port=8000):
-    # sender.toml 의 intrinsic 을 viewer 가 fetch 할 JSON 으로 export
-    # (archive_data 가 data/ 를 비운 뒤여야 하므로 viewer 시작 시점에 생성)
     export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")
     os.chdir(PROJECT_ROOT)
-    # Tailscale IP 에 바인드 → 휴대폰 등 Tailscale 기기에서 외부 접근(외부인 차단).
-    # network.toml 의 desktop_ip(데스크톱 Tailscale IP)를 사용.
     from src.utils.config import load_network
     host = load_network().get("desktop_ip", "0.0.0.0")
     server = http.server.ThreadingHTTPServer((host, port), _ViewerHandler)
@@ -842,8 +807,6 @@ if __name__ == "__main__":
     _matlab_proc = None
 
     if args.verify or args.calib:
-        # verify 와 calib 은 같은 경량 파이프라인(수신+radar+YOLO박스+뷰어).
-        # calib 은 여기에 레이더↔카메라 yaw/baseline 추정 스레드만 추가로 얹는다.
         mode = "외부 캘리브" if args.calib else "경량 검증"
         print(f"=== {mode} 모드 (수신 + radar + YOLO박스 + 뷰어, 무거운 단계 전부 스킵) ===")
         archive_data()
@@ -891,13 +854,12 @@ if __name__ == "__main__":
         t_radar.start()
         t_webcam.start()
 
-        # 레이더 메타(.mat/chirp) 확정 후 안정화되면 배경 캡처 시작
         import time as _time
         print("[Init] 레이더 메타 수신 대기...")
         if receiver._chirp_ready.wait(timeout=20):
             print("[Init] 메타 확정 — 2초 후 시작")
             _time.sleep(2)
-            _matlab_proc = _start_matlab_cfar()   # .mat 생성됨 → 실시간 CFAR 시작
+            _matlab_proc = _start_matlab_cfar()
         else:
             print("[Init] 메타 타임아웃(20s) — 웹캠만으로 진행 (레이더 CFAR 미시작)")
 
@@ -921,8 +883,6 @@ if __name__ == "__main__":
             generate_depth()
         else:
             print("\n=== Step 3: 건너뜀 (--skip-depth) ===")
-        # DA3 상주(release 안 함) — 라이브에서 새 물체 등장 시 즉시 재추론하기 위함.
-        # (ESRGAN 도 같이 상주, VRAM 16GB 여유. 기존 GPUManager.release 제거)
 
         if not args.skip_calib:
             print("\n=== Step 3.5: 레이더 기반 depth 보정 (계수 산출) ===")
@@ -936,9 +896,6 @@ if __name__ == "__main__":
         print("\n=== Step 4: 첫 마스크 (초기 객체 식별 + 배경 구멍) ===")
         generate_mask()
 
-        # 배경/깊이/마스크 준비 완료 → 뷰어 열기.
-        # crop/3D/pose 는 시작 1회가 아니라 live_update_loop 상태머신이 이벤트로 처리
-        # (새 물체 등장 → NEW→DA3재추론→crop→fal.ai 3D→READY→GigaPose pose).
         _http_server = _start_viewer()
 
         t_live = threading.Thread(target=live_update_loop,
@@ -946,7 +903,6 @@ if __name__ == "__main__":
         t_live.start()
         print(f"[Live] 상태머신 스레드 시작 (pose={'켬' if not args.skip_3d else '끔'})")
 
-        # 동적 배경 채우기 백그라운드 (receiver.toml [dynamic_bg] enabled)
         from src.utils.config import load_receiver
         if load_receiver().get("dynamic_bg", {}).get("enabled", True):
             from src.background.dynamic_bg_fill import main as _dynbg_main

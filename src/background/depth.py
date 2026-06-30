@@ -11,7 +11,7 @@ import numpy as np
 PROJECT_ROOT   = Path(__file__).resolve().parent.parent.parent
 INPUT_PATH     = PROJECT_ROOT / "data" / "scene" / "background.jpg"
 OUTPUT_PATH    = PROJECT_ROOT / "data" / "scene" / "depth.png"
-METRIC_PATH    = PROJECT_ROOT / "data" / "scene" / "depth_metric.npy"   # 미터 무손실(Raw 모드)
+METRIC_PATH    = PROJECT_ROOT / "data" / "scene" / "depth_metric.npy"
 CALIB_PATH     = PROJECT_ROOT / "data" / "scene" / "depth_calib.json"
 WORKFLOW_PATH  = PROJECT_ROOT / "workflows" / "da3_depth.json"
 
@@ -22,7 +22,7 @@ def _write_metric_vis(metric_npy: Path, png_path: Path, calib_path: Path):
     1m 넘으면 잘리는 문제를 정규화로 해결(거리값은 .npy 가 보존)."""
     m = np.load(str(metric_npy)).astype(np.float32)
     mn, mx = float(m.min()), float(m.max())
-    vis = 1.0 - (m - mn) / (mx - mn + 1e-8)            # 가까움(작은 미터)=밝음(1)
+    vis = 1.0 - (m - mn) / (mx - mn + 1e-8)
     cv2.imwrite(str(png_path), (vis * 255).astype(np.uint8))
     calib_path.write_text(json.dumps(
         {"model": "metric_linear", "range_min_m": mn, "range_max_m": mx}, indent=2))
@@ -30,7 +30,7 @@ def _write_metric_vis(metric_npy: Path, png_path: Path, calib_path: Path):
 COMFYUI_URL    = "http://127.0.0.1:8188"
 COMFYUI_INPUT  = Path("C:/dev/ComfyUI/input")
 COMFYUI_OUTPUT = Path("C:/dev/ComfyUI/output")
-METRIC_NPY     = COMFYUI_OUTPUT / "da3_metric_raw.npy"   # da3 노드가 덤프하는 미터맵
+METRIC_NPY     = COMFYUI_OUTPUT / "da3_metric_raw.npy"
 
 
 def _queue(workflow):
@@ -77,15 +77,12 @@ def generate_depth(input_path=None):
             src = COMFYUI_OUTPUT / node_out["images"][0]["filename"]
             shutil.copy(src, OUTPUT_PATH)
             print(f"[Depth] 저장 완료: {OUTPUT_PATH}")
-            # Raw(metric) 모드: 미터 무손실 npy 복사 + 시각화 depth.png 재생성
-            # (raw 미터를 8bit 로 저장하면 1m 넘는 게 다 흰색으로 잘려 뷰어가 깨짐)
             if METRIC_NPY.exists():
                 shutil.copy(METRIC_NPY, METRIC_PATH)
                 _write_metric_vis(METRIC_PATH, OUTPUT_PATH, CALIB_PATH)
                 print(f"[Depth] metric npy 복사 + 시각화 depth.png 재생성")
             return
 
-    # 에러 내용 출력
     status = history.get("status", {})
     msgs   = status.get("messages", [])
     for msg in msgs:

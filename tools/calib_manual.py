@@ -25,15 +25,13 @@ if depth is None:
 h, w = img.shape[:2]
 depth = cv2.resize(depth, (w, h)).astype(np.float32) / 255.0
 
-STEP    = 3     # 픽셀 서브샘플링 (빠른 업데이트)
-PC_SIZE = 600   # 포인트클라우드 뷰 크기
+STEP    = 3
+PC_SIZE = 600
 
 WIN = "캘리브레이션 (s=저장, q=종료)"
 cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
 cv2.resizeWindow(WIN, 1600, 650)
 
-# k1, k2: -0.5 ~ +0.5  (슬라이더 0~1000, 기준=500)
-# fx: 50~200%           (슬라이더 50~200, 기준=100 = 이미지 너비)
 cv2.createTrackbar("k1 x1000", WIN, 500, 1000, lambda v: None)
 cv2.createTrackbar("k2 x1000", WIN, 500, 1000, lambda v: None)
 cv2.createTrackbar("fx  pct",  WIN, 100, 200,  lambda v: None)
@@ -44,7 +42,7 @@ def make_pointcloud_topdown(img_ud, depth_map, fx_px):
 
     ys, xs = np.mgrid[0:h:STEP, 0:w:STEP]
     d      = depth_map[ys, xs]
-    colors = img_ud[ys, xs]          # BGR
+    colors = img_ud[ys, xs]
 
     mask = d > 0.02
     xs, ys, d, colors = xs[mask], ys[mask], d[mask], colors[mask]
@@ -61,7 +59,7 @@ def make_pointcloud_topdown(img_ud, depth_map, fx_px):
 
     px = ((X - x_min) / (x_max - x_min + 1e-6) * (PC_SIZE - 1)).astype(int)
     pz = ((Z - z_min) / (z_max - z_min + 1e-6) * (PC_SIZE - 1)).astype(int)
-    pz = PC_SIZE - 1 - pz   # 가까운 쪽이 아래
+    pz = PC_SIZE - 1 - pz
 
     view = np.full((PC_SIZE, PC_SIZE, 3), 20, dtype=np.uint8)
     for i in range(len(px)):

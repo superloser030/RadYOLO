@@ -21,13 +21,8 @@ import statistics
 import time as _time
 from pathlib import Path
 
-NEGATE_AZIMUTH = False   # 좌우 반대로 매칭되면 True 로
+NEGATE_AZIMUTH = False
 
-# ── 외부 캘리브레이션 (src/utils/radar_cam_calib.py, `main_r.py --calib` 산출) ──
-# 카메라↔레이더 상대 자세. yaw(좌우 방향 오프셋)+baseline(tx,tz 위치차)를
-# 보정한다. 파일 없으면 0(=기존 "완전 동일 위치/방향" 가정).
-#   yaw_offset_deg: 레이더 az 에 더할 좌우 방향 보정(도)
-#   tx, tz        : 레이더 기준 카메라 위치 오프셋(m) — baseline
 _CALIB_PATH = Path(__file__).resolve().parents[2] / "config" / "calib_radar_cam.json"
 
 
@@ -52,19 +47,19 @@ def radar_to_x(range_m: float, azimuth_deg: float, cam: dict):
     """
     az = -azimuth_deg if NEGATE_AZIMUTH else azimuth_deg
     az_r = math.radians(az)
-    xr = range_m * math.sin(az_r)        # 레이더 좌표 (수평면, y=0)
+    xr = range_m * math.sin(az_r)
     zr = range_m * math.cos(az_r)
     yaw = math.radians(_calib["yaw_offset_deg"])
-    xc = math.cos(yaw) * xr + math.sin(yaw) * zr + _calib["tx"]   # 카메라 좌표
+    xc = math.cos(yaw) * xr + math.sin(yaw) * zr + _calib["tx"]
     zc = -math.sin(yaw) * xr + math.cos(yaw) * zr + _calib["tz"]
     if zc <= 1e-6:
         return None
     return cam["cx"] + cam["fx"] * xc / zc
 
 
-_last_nonempty: list = []       # 마지막으로 검출 > 0 이었던 targets
-_last_nonempty_at: float = 0.0  # 그 wall-clock 시각
-CFAR_FALLBACK_TTL = float("inf")  # 정적물체 도플러 억압 대응: 마지막 검출 무기한 유지
+_last_nonempty: list = []
+_last_nonempty_at: float = 0.0
+CFAR_FALLBACK_TTL = float("inf")
 
 
 def load_latest_targets(path, ts_ms=None, tol_ms=3000):
@@ -90,7 +85,6 @@ def load_latest_targets(path, ts_ms=None, tol_ms=3000):
     else:
         frame = min(data, key=lambda f: abs(f.get("ts_ms", 0) - ts_ms))
         best_ts = frame.get("ts_ms", 0)
-        # 타임스탬프 동기 실패도 폴백 사용 (동기 실패 ≠ 레이더 없음)
         if best_ts > 0 and abs(best_ts - ts_ms) > tol_ms:
             return _last_nonempty
 
@@ -98,7 +92,6 @@ def load_latest_targets(path, ts_ms=None, tol_ms=3000):
     if targets:
         _last_nonempty = targets
         _last_nonempty_at = _time.time()
-    # 현재 프레임 비어 있으면 항상 폴백 (CFAR 0 / 정적물체 도플러 억압 모두 포함)
     return _last_nonempty
 
 
@@ -205,14 +198,13 @@ def match_all(targets, objs, cam, gate_frac=0.5, gate_min=1.2):
         sx = radar_to_x(t["range_m"], t["azimuth_deg"], cam)
         if sx is None:
             continue
-        # 방위각 매칭 객체 중 expected 거리 게이트 통과한 것 → expected 최근접 1개
         cands = []
         for i, prof in enumerate(profs):
             if not _in_profile(sx, prof):
                 continue
             exp = objs[i].get("expected")
             if exp is None:
-                cands.append((i, 0.0))            # expected 없으면 게이트 없이 후보
+                cands.append((i, 0.0))
             else:
                 gate = max(gate_min, exp * gate_frac)
                 dist = abs(t["range_m"] - exp)
@@ -220,7 +212,6 @@ def match_all(targets, objs, cam, gate_frac=0.5, gate_min=1.2):
                     cands.append((i, dist))
         if cands:
             obj_pts[min(cands, key=lambda c: c[1])[0]].append(t)
-        # 게이트 다 탈락 → 배경/노이즈로 버림
 
     return {objs[i]["tid"]: _aggregate(obj_pts[i]) for i in range(len(objs))}
 

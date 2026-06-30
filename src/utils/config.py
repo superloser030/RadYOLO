@@ -38,7 +38,6 @@ def load_camera() -> dict:
     return load_sender()["camera"]
 
 
-# viewer.html / pose 가 쓰는 intrinsic 키
 _CAMERA_VIEW_KEYS = ["model", "width", "height", "fx", "fy", "cx", "cy",
                      "dfov_deg", "hfov_deg", "vfov_deg"]
 
@@ -58,7 +57,6 @@ def export_camera_json(dest) -> dict:
     return view
 
 
-# DCA1000 UDP 패킷 payload 크기 (실측 ~1456B) + record 자동종료 전 안전 마진(초)
 _DCA_PAYLOAD = 1456
 _RECORD_SAFE_SECS = 70
 
@@ -80,8 +78,8 @@ def resolve_level(sender_cfg: dict, level_idx: int) -> dict:
     lv    = dict(levels[level_idx - 1])
     radar = sender_cfg["radar"]
 
-    lv["num_loops"]       = lv["chirp"] // 2          # TDM 2TX
-    lv["frame_period_ms"] = round(1000 / lv["fps"])   # ms 단위 (frameCfg 5번째)
+    lv["num_loops"]       = lv["chirp"] // 2
+    lv["frame_period_ms"] = round(1000 / lv["fps"])
     lv["bin_frame_size"]  = (radar["samples_per_chirp"]
                              * radar["num_receivers"]
                              * lv["chirp"] * 4)

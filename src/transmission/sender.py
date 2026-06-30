@@ -7,14 +7,11 @@ import datetime
 import json
 import subprocess
 from pathlib import Path
-# serial(pyserial)은 레이더(UART) 송신에만 필요 → 함수 내부에서 지연 import
-# (웹캠 전용 모드/데스크톱에서는 미설치여도 동작)
 
 from src.utils.config import load_network, load_sender, resolve_level
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
-# ── config 로드 ──────────────────────────────────
 _net    = load_network()
 _sender = load_sender()
 _dca    = _sender["dca"]
@@ -31,8 +28,8 @@ DCA_DATA_IP    = _dca["data_ip"]
 DCA_DATA_PORT  = _dca["data_port"]
 CLI_PORT       = _dca["cli_port"]
 CLI_BAUD       = _dca["cli_baud"]
-RESTART_AT_SEQ = _dca.get("restart_at_seq", 70000)  # run()에서 레벨 기반으로 갱신
-_active_level  = None                                # run()에서 설정 (restart 시 재사용)
+RESTART_AT_SEQ = _dca.get("restart_at_seq", 70000)
+_active_level  = None
 
 VERBOSE = _sender["mode"].get("verbose", False)
 
@@ -103,9 +100,9 @@ def _send_and_wait(ser, command, timeout=2.0):
         if not line:
             continue
         resp += line
-        if "mmwDemo" in line:   # 프롬프트 = 이 명령 처리 완료
+        if "mmwDemo" in line:
             break
-    time.sleep(0.08)   # 레이더가 다음 명령 받을 준비 시간 (Done 누락/레이스 방지)
+    time.sleep(0.08)
     return resp.strip()
 
 
@@ -145,8 +142,8 @@ def send_radar_config(num_loops, frame_period_ms):
                 continue
             if command.startswith('frameCfg'):
                 parts = command.split()
-                parts[3] = str(num_loops)        # numLoops
-                parts[5] = str(frame_period_ms)  # framePeriodicity (ms 단위)
+                parts[3] = str(num_loops)
+                parts[5] = str(frame_period_ms)
                 command = ' '.join(parts)
             resp = _send_and_wait(ser, command)
             print(f"  Send: {command:<45} | {_resp_status(resp)}")
@@ -223,9 +220,6 @@ def restart_radar():
     except RuntimeError:
         pass
 
-    # 전체 .cfg 재전송 (.cfg 는 맨앞 sensorStop, 맨끝 sensorStart 포함).
-    # reconfig 없이 sensorStart/sensorStart 0 만 보내면 펌웨어 상태에 따라
-    # "no configuration" / "partial configuration" 등으로 거부되므로 전체 재설정.
     print("[UART] 전체 reconfig 재전송 중...")
     send_radar_config(_active_level["num_loops"], _active_level["frame_period_ms"])
 
@@ -292,9 +286,6 @@ def radar_forward():
 
 
 def webcam_send(fps, quality, width, height):
-    # DSHOW 백엔드 — 외장 웹캠은 DSHOW 에만 잡힘 (MSMF 는 외장 미열거).
-    # 480p 에서만 MJPG 협상되어 30fps (1080p/720p 는 YUY2 로 8/3.5fps).
-    # → 레벨 해상도를 480p 고정해서 30fps 확보.
     cap = cv2.VideoCapture(_cam["device_index"], cv2.CAP_DSHOW)
     cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*'MJPG'))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH,  width)
@@ -349,7 +340,6 @@ def webcam_send(fps, quality, width, height):
             _last_report = _now
             _bytes_acc = _frame_acc = 0
 
-        # 목표 주기에서 캡처+인코딩+전송 소요시간을 뺀 만큼만 대기
         rest = interval - (time.time() - t_loop)
         if rest > 0:
             time.sleep(rest)
@@ -392,7 +382,6 @@ def select_level():
     if mode["sender_mode"] == 0:
         return resolve_level(_sender, mode["fixed_level"])
 
-    # mode 1: 자동 대역폭 — 측정 × target% 예산 이하인 최고 레벨 선택
     mbps = measure_bandwidth_mbps()
     if mbps <= 0:
         print("[Level] 대역폭 측정 실패 → 최소 레벨 1 사용")
@@ -424,7 +413,6 @@ def run(transmit_mode: int):
     threads = []
 
     if transmit_mode == 1:
-        # 메타는 데스크톱이 받을 때까지 백그라운드 재전송 (순서 무관)
         threads.append(threading.Thread(target=meta_sender_loop, args=(lv,), daemon=True))
         dca_cli("fpga")
         dca_cli("record")

@@ -28,16 +28,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OVERLAY_PATH = PROJECT_ROOT / "data" / "scene" / "live_overlay.json"
 OUT_PATH     = PROJECT_ROOT / "config" / "calib_radar_cam.json"
 
-AZ_CENTER    = 35.0   # 화면 중앙부만(deg) — 가장자리 왜곡/레이더 부정확 제외
-NEAR_GATE    = 2.0    # coarse 단계 거리 상한(m)
-FAR_GATE     = 6.0    # fine 단계 거리 상한(m)
-MIN_SAMPLES  = 20     # 추정 시작 최소 표본
-MAX_SAMPLES  = 800    # 최근 표본만 유지(드리프트 대응)
-CONVERGE_DEG = 0.15   # yaw 변화가 이보다 작으면 수렴
+AZ_CENTER    = 35.0
+NEAR_GATE    = 2.0
+FAR_GATE     = 6.0
+MIN_SAMPLES  = 20
+MAX_SAMPLES  = 800
+CONVERGE_DEG = 0.15
 POLL_SEC     = 0.3
-MIN_N        = 3      # 표본 최소 레이더 점(약반사 az noise 제외)
-DUP_DR       = 0.3    # 겹침 판정 거리(m) — 다른 물체와 이내면 같은 셀(모호)
-DUP_DAZ      = 3.0    # 겹침 판정 방위각(deg)
+MIN_N        = 3
+DUP_DR       = 0.3
+DUP_DAZ      = 3.0
 
 
 def _residuals(params, az_cam, az_rad, rng):
@@ -66,7 +66,7 @@ def calibrate_loop(cam, shutdown_event=None):
     fx, cx = cam["fx"], cam["cx"]
     print(f"[Calib] 외부 캘리브 시작 — 물체를 가까이(1~2m) 중앙에서 좌우로 움직이세요.")
 
-    samples    = deque(maxlen=MAX_SAMPLES)   # (az_cam, az_radar, range)
+    samples    = deque(maxlen=MAX_SAMPLES)
     range_gate = NEAR_GATE
     stage      = "near"
     prev_yaw   = None
@@ -75,26 +75,23 @@ def calibrate_loop(cam, shutdown_event=None):
     while shutdown_event is None or not shutdown_event.is_set():
         overlay = _read_overlay()
         if overlay:
-            # 이 프레임의 유효 레이더 매칭 물체(r·az·n·bbox 다 있는 것)
             objs = []
             for o in overlay:
                 r, az, bb, npts = o.get("range_m"), o.get("az"), o.get("bbox"), o.get("n", 0)
                 if r is None or az is None or not bb or not npts:
                     continue
                 objs.append((float(r), float(az), int(npts), bb))
-            # cls 무관 자동 선택: ① 강반사(n≥MIN_N) ② 다른 물체와 같은 (range,az)
-            # 셀을 공유하지 않는(=분리된) 것만. 겹치면 누수/중복이라 주인이 모호.
             for i, (r, az, npts, bb) in enumerate(objs):
                 if npts < MIN_N:
                     continue
                 if any(j != i and abs(r - r2) < DUP_DR and abs(az - az2) < DUP_DAZ
                        for j, (r2, az2, _, _) in enumerate(objs)):
-                    continue                      # 다른 물체와 같은 셀 공유 → 모호, 제외
+                    continue
                 bcx = (bb[0] + bb[2]) / 2.0
                 az_cam = math.degrees(math.atan2(bcx - cx, fx))
                 if abs(az_cam) > AZ_CENTER:
                     continue
-                if r > range_gate:                # 가까운 우선(near 2m → fine 6m)
+                if r > range_gate:
                     continue
                 samples.append((az_cam, az, r))
 
@@ -103,8 +100,6 @@ def calibrate_loop(cam, shutdown_event=None):
             arr = np.array(samples)
             ac, ar, rg = arr[:, 0], arr[:, 1], arr[:, 2]
 
-            # yaw-only: baseline 은 az noise 과적합으로 신뢰 불가 → 0 고정.
-            # yaw 만 robust median(ac-ar). stage 는 거리게이트 확대 용도로만.
             yaw = float(np.median(ac - ar)); tx = tz = 0.0
             res = _residuals([yaw, 0, 0], ac, ar, rg)
             rms = float(np.sqrt(np.mean(res ** 2)))

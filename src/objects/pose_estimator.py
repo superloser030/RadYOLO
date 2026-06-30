@@ -13,12 +13,11 @@ GIGAPOSE_PY   = r"C:\Users\loser\anaconda3\envs\gigapose\python.exe"
 SERVER_SCRIPT = PROJECT_ROOT / "tools" / "gigapose" / "inference_server.py"
 RENDER_SCRIPT = PROJECT_ROOT / "tools" / "gigapose" / "prepare_templates.py"
 
-_server       = None           # 단일 추론 서버 {"proc", "lock"} — 모델 1번만 로드
+_server       = None
 _server_lock  = threading.Lock()
-_server_retry_at = 0.0        # 서버 재시작 가능 시각 (실패 시 60초 쿨다운)
+_server_retry_at = 0.0
 
 
-# ── 템플릿 렌더링 ────────────────────────────────────────────────────
 
 def prepare_templates(mesh_path: str, template_dir: str, level: int = 1):
     """GLB 메쉬 → 템플릿 이미지 렌더링 (이미 있으면 스킵)."""
@@ -31,7 +30,6 @@ def prepare_templates(mesh_path: str, template_dir: str, level: int = 1):
     print(f"[Pose] 렌더링 완료 → {template_dir}")
 
 
-# ── 영구 서버 관리 ───────────────────────────────────────────────────
 
 def _get_server(camera_k):
     """단일 추론 서버 시작/재사용. 모델은 1번만 로드, 템플릿은 서버가 요청별 캐시."""
@@ -39,10 +37,10 @@ def _get_server(camera_k):
     global _server, _server_retry_at
     with _server_lock:
         if _server and _server["proc"].poll() is None:
-            return _server         # 살아있는 서버 재사용 (객체 수 무관)
+            return _server
 
         if time.time() < _server_retry_at:
-            return None            # 60초 쿨다운 중 — 재시작 시도 안 함
+            return None
 
         k_str = ",".join(map(str, map(float, camera_k)))
         cmd   = [GIGAPOSE_PY, str(SERVER_SCRIPT), "--camera-k", k_str]
@@ -68,7 +66,6 @@ def _get_server(camera_k):
         return _server
 
 
-# ── 포즈 추정 ────────────────────────────────────────────────────────
 
 def estimate_pose(image_path: str, bbox, template_dir: str, camera_k):
     """
@@ -82,7 +79,7 @@ def estimate_pose(image_path: str, bbox, template_dir: str, camera_k):
 
     req = json.dumps({"image": image_path, "bbox": list(map(float, bbox)),
                       "template": str(template_dir)})
-    with info["lock"]:      # 동시 요청 직렬화
+    with info["lock"]:
         try:
             info["proc"].stdin.write(req + "\n")
             info["proc"].stdin.flush()

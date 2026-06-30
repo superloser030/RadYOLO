@@ -28,7 +28,6 @@ class CalibHandler(SimpleHTTPRequestHandler):
             CALIB_PATH.parent.mkdir(parents=True, exist_ok=True)
             CALIB_PATH.write_text(json.dumps(calib, indent=2))
 
-            # undistort 이미지 저장
             try:
                 import cv2, numpy as np
                 img = cv2.imread(str(PROJECT_ROOT / "data" / "scene" / "background.jpg"))
@@ -60,7 +59,7 @@ class CalibHandler(SimpleHTTPRequestHandler):
         self.end_headers()
 
     def log_message(self, fmt, *args):
-        pass  # 로그 억제
+        pass
 
 
 if __name__ == "__main__":

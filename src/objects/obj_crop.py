@@ -53,7 +53,6 @@ def _build_gradient_map(img: np.ndarray, depth: np.ndarray):
 def crop_objects():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # YOLO: 감지 + 클래스
     yolo    = YOLO(str(YOLO_PATH))
     results = yolo(str(INPUT_PATH), conf=_MODEL_CONF, verbose=False)
     result  = results[0]
@@ -71,7 +70,6 @@ def crop_objects():
         print("[Crop] 감지된 객체 없음")
         return []
 
-    # SAM2: 마스크 생성
     print("[Crop] SAM2 로드 중...")
     sam2 = _load_sam2()
     sam2.set_image(img_rgb)
@@ -94,14 +92,12 @@ def crop_objects():
 
         x1, y1, x2, y2 = map(int, box.cpu().numpy())
 
-        # SAM2로 정밀 마스크 생성
         masks, scores, _ = sam2.predict(
             box=np.array([x1, y1, x2, y2], dtype=np.float32),
             multimask_output=False
         )
         sam_mask = (masks[0] > 0).astype(np.uint8) * 255
 
-        # bbox crop 범위
         cx1 = max(0, x1 - BBOX_PAD)
         cy1 = max(0, y1 - BBOX_PAD)
         cx2 = min(w, x2 + BBOX_PAD)
@@ -115,7 +111,6 @@ def crop_objects():
         dbg_dir = obj_dir / "debug"
         dbg_dir.mkdir(exist_ok=True)
 
-        # ── 최종 결과물 ──────────────────────────────────────────────
         cv2.imwrite(str(obj_dir / "crop.jpg"), crop(img), [cv2.IMWRITE_JPEG_QUALITY, 95])
 
         white = np.full_like(img, 255)
@@ -123,7 +118,6 @@ def crop_objects():
         cv2.imwrite(str(obj_dir / "cutout.jpg"), crop(cutout), [cv2.IMWRITE_JPEG_QUALITY, 95])
         cv2.imwrite(str(obj_dir / "mask.png"), crop(sam_mask))
 
-        # ── 파이프라인 중간 단계 (debug/) ────────────────────────────
         cv2.imwrite(str(dbg_dir / "1_sam2_mask.png"),   crop(sam_mask))
         cv2.imwrite(str(dbg_dir / "2_depth_grad.png"),  crop(depth_vis))
         cv2.imwrite(str(dbg_dir / "3_color_grad.png"),  crop(color_vis))
@@ -139,7 +133,6 @@ def crop_objects():
         print(f"[Crop] {class_name}_{idx}  conf={conf:.2f}  sam2={scores[0]:.3f}  → {obj_dir.relative_to(PROJECT_ROOT)}")
         objects.append((class_name, idx, obj_dir))
 
-    # SAM2 는 crop 단계에서만 쓰므로 GPU 에서 내림 (VRAM 반환)
     del sam2
     from src.utils.gpu_scheduler import GPUManager
     GPUManager.release("SAM2")

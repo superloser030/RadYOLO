@@ -46,13 +46,11 @@ def calibrate_depth():
     if depth_img is None:
         print("[Calib] depth.png 읽기 실패, 건너뜀")
         return
-    if depth_img.ndim == 3:          # 혹시 다채널로 읽히면 첫 채널만
+    if depth_img.ndim == 3:
         depth_img = depth_img[:, :, 0]
     h, w       = depth_img.shape
     depth_norm = depth_img.astype(np.float32) / 255.0
 
-    # 레이더 range 라이브 누적 — targets.json 은 최신 프레임만 덮어쓰므로 과거
-    # background_ts 로는 못 찾는다(=0개 버그). calib 시점에 몇 초 폴링해 분포를 모은다.
     import time as _t
     R_all, seen = [], set()
     t0 = _t.time()
@@ -82,27 +80,21 @@ def calibrate_depth():
 
     D_flat = depth_norm.flatten()
 
-    # 분위수 매칭 회귀: DA3 분위수 ↔ 레이더 역분위수 (여러 점 → 끝점 2개보다 robust,
-    # 먼 쪽 끝점 1개에 안 끌려 가까운 영역 정확 + 먼 쪽은 회귀선으로 외삽).
-    # DA3 높음(밝음)=가까움 ↔ 레이더 작음=가까움 이라 R 은 역분위로 매칭.
-    qs   = np.arange(5, 100, 5)                  # 5,10,...,95 분위
-    D_q  = np.percentile(D_flat, qs)             # 오름차순 (먼→가까움)
-    R_q  = np.percentile(R_all, 100 - qs)        # 내림차순 (먼→가까움)
-    a, b = np.polyfit(D_q, np.log(R_q), 1)       # log(R) = a*D + b 회귀
+    qs   = np.arange(5, 100, 5)
+    D_q  = np.percentile(D_flat, qs)
+    R_q  = np.percentile(R_all, 100 - qs)
+    a, b = np.polyfit(D_q, np.log(R_q), 1)
     a, b = float(a), float(b)
 
     print(f"[Calib] log회귀  a={a:.3f}, b={b:.3f} ({len(qs)}개 분위 매칭)")
     print(f"[Calib] D=1(최근): {np.exp(a+b):.2f}m  D=0(최원/외삽): {np.exp(b):.2f}m")
 
-    # 계수+범위 산출(1회) → depth_calib.json. 변환은 apply_calib 로 일원화
-    # (새 물체 DA3 재추론 시 같은 계수 재적용 위함).
     corrected    = np.exp(a * depth_norm + b)
     c_min, c_max = float(corrected.min()), float(corrected.max())
     calib = {"model": "log_linear", "a": float(a), "b": float(b),
              "range_min_m": c_min, "range_max_m": c_max}
     (DEPTH_PATH.parent / "depth_calib.json").write_text(json.dumps(calib, indent=2))
 
-    # log 스케일 정규화(근거리 대비 유지)는 apply_calib 안에 있음
     corrected_norm = apply_calib(depth_norm, calib)
     cv2.imwrite(str(DEPTH_PATH), (corrected_norm * 255).astype(np.uint8))
     print(f"[Calib] depth.png 보정 완료  (범위 {c_min:.2f}~{c_max:.2f}m)")

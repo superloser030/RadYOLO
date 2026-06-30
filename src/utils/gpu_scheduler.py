@@ -19,10 +19,10 @@ from concurrent.futures import Future
 
 class Priority(IntEnum):
     """숫자가 작을수록 먼저 실행."""
-    REALTIME    = 0   # 실시간 추적 (지연 민감, 최우선)
-    INTERACTIVE = 1   # 포즈 추정 (GigaPose)
-    BACKGROUND  = 2   # 동적 배경 갱신
-    OFFLINE     = 3   # 3D 생성(Trellis) 등 무거운 1회성
+    REALTIME    = 0
+    INTERACTIVE = 1
+    BACKGROUND  = 2
+    OFFLINE     = 3
 
 
 class GPUScheduler:
@@ -34,7 +34,7 @@ class GPUScheduler:
 
     def __init__(self):
         self._q       = queue.PriorityQueue()
-        self._counter = itertools.count()   # 같은 우선순위 내 FIFO tiebreaker
+        self._counter = itertools.count()
         self._worker  = None
         self._stop    = threading.Event()
 
@@ -64,7 +64,7 @@ class GPUScheduler:
             if fut.set_running_or_notify_cancel():
                 try:
                     fut.set_result(fn(*args, **kwargs))
-                except Exception as e:        # 작업 실패가 워커를 죽이지 않도록
+                except Exception as e:
                     fut.set_exception(e)
             self._q.task_done()
 
@@ -111,7 +111,6 @@ class GPUManager:
         import json
         import urllib.request
         import subprocess
-        # 1) ComfyUI 본체 모델 언로드
         try:
             req = urllib.request.Request(
                 f"{cls.COMFYUI_URL}/free",
@@ -121,7 +120,6 @@ class GPUManager:
             print("[VRAM] ComfyUI 본체 모델 언로드")
         except Exception as e:
             print(f"[VRAM] ComfyUI free 실패(무시): {e}")
-        # 2) DA3 추론 프로세스(독립 pixi) 종료 — /free 가 못 미치는 ~6GB
         try:
             subprocess.run(
                 ["powershell", "-Command",
@@ -151,5 +149,4 @@ class GPUManager:
             print(f"[VRAM] {tag}반환")
 
 
-# 모듈 전역 싱글턴 — 필요한 곳에서 import 해서 submit
 scheduler = GPUScheduler()

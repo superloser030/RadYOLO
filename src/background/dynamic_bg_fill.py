@@ -1,5 +1,3 @@
-# 동적 배경 채우기: 객체가 비켜나 드러난 영역(480p)으로 배경 구멍을 메우고,
-# 진행 단계마다 ESRGAN 으로 업스케일해 background.jpg 갱신. 설정은 receiver.toml [dynamic_bg].
 import json
 import threading
 import time
@@ -17,10 +15,10 @@ SCENE          = PROJECT_ROOT / "data" / "scene"
 WEBCAM         = PROJECT_ROOT / "data" / "webcam"
 DYN            = SCENE / "dynamic_bg"
 CHOSEN         = DYN / "chosen"
-RAW_PATH       = SCENE / "background_raw.jpg"     # 저해상 원본(시작점)
-FILLED_PATH    = DYN / "filled_raw.jpg"           # 채워지는 중인 저해상 배경
-REMAINING_PATH = DYN / "remaining.png"            # 남은 가려진 영역(진행 확인)
-OUT_BG         = SCENE / "background.jpg"          # 최종 업스케일 결과(뷰어가 읽음)
+RAW_PATH       = SCENE / "background_raw.jpg"
+FILLED_PATH    = DYN / "filled_raw.jpg"
+REMAINING_PATH = DYN / "remaining.png"
+OUT_BG         = SCENE / "background.jpg"
 YOLO_MODEL     = PROJECT_ROOT / "models" / "yolo11x-seg.pt"
 
 
@@ -46,21 +44,19 @@ def _esrgan(src: Path, dst: Path):
     raise RuntimeError("ESRGAN 결과 없음")
 
 
-_depth_lock = threading.Lock()   # DynBG DA3 재추론 직렬화 (concurrent 방지)
+_depth_lock = threading.Lock()
 
 
 def _rerun_depth(bg_path: Path):
     """background.jpg 갱신 후 DA3 재추론 + 보정계수 재적용 → depth.png.
     비동기(daemon thread) — DynBG 루프 블로킹 없이 뷰어 포인트클라우드 갱신 신호 제공."""
     if not _depth_lock.acquire(blocking=False):
-        return   # 이미 재추론 중 → 최신 배경으로 곧 덮어써질 것이므로 스킵
+        return
     def _work():
         try:
             from src.background.depth import generate_depth
             from src.background.depth_calibration import apply_calib
             generate_depth(input_path=str(bg_path))
-            # metric(Raw) 모드면 generate_depth 가 시각화 depth.png 를 이미 만들었고
-            # calib 은 metric_linear(a/b 없음) → log apply_calib 스킵. 아니면 log 보정.
             if not (SCENE / "depth_metric.npy").exists():
                 calib_p = SCENE / "depth_calib.json"
                 if calib_p.exists():
@@ -71,7 +67,7 @@ def _rerun_depth(bg_path: Path):
                             d = d[:, :, 0]
                         cn = apply_calib(d.astype(np.float32) / 255.0, cal)
                         cv2.imwrite(str(SCENE / "depth.png"), (cn * 255).astype(np.uint8))
-            (SCENE / "bg_ts.txt").write_text(str(time.time()))   # 뷰어 재빌드 신호
+            (SCENE / "bg_ts.txt").write_text(str(time.time()))
             print("[DynBG] depth.png 갱신 완료 → 뷰어 포인트클라우드 재빌드 신호")
         except Exception as e:
             print(f"[DynBG] depth 재추론 실패: {e}")
@@ -132,10 +128,10 @@ def main():
     filled = cv2.imread(str(RAW_PATH))
     H, W = filled.shape[:2]
     total = H * W
-    thr_px = cover_min * total                      # 선정 최소(전체 화면 %)
+    thr_px = cover_min * total
 
     yolo = YOLO(str(YOLO_MODEL))
-    remaining = _object_mask(yolo, filled, dilate_px, mask_conf)  # 가려진 영역 = 원본의 객체 자리
+    remaining = _object_mask(yolo, filled, dilate_px, mask_conf)
     initial = int((remaining > 0).sum())
     if initial == 0:
         print("[DynBG] 가려진 영역 없음(객체 미검출). 종료.")
@@ -149,8 +145,8 @@ def main():
     sel = 0
     up_idx = 0
     last_up_remaining = initial
-    reveal_count = np.zeros((H, W), dtype=np.int16)  # 픽셀별 연속 미검출 프레임 수
-    REVEAL_MIN = 3   # N프레임 연속 YOLO 미검출이어야 배경으로 인정 (단일 틱 miss 방지)
+    reveal_count = np.zeros((H, W), dtype=np.int16)
+    REVEAL_MIN = 3
 
     try:
         while True:
@@ -167,17 +163,15 @@ def main():
                     img = cv2.resize(img, (W, H))
 
                 obj = _object_mask(yolo, img, dilate_px, mask_conf)
-                # 연속 미검출 카운터 갱신: YOLO에 잡히면 즉시 0 리셋
                 reveal_count[obj == 0] += 1
                 reveal_count[obj > 0]   = 0
-                # N프레임 연속 미검출 픽셀만 "드러난 배경"으로 인정
                 stable    = (reveal_count >= REVEAL_MIN).astype(np.uint8) * 255
-                new_cover = cv2.bitwise_and(remaining, stable)  # 새로 채울 수 있는 곳
+                new_cover = cv2.bitwise_and(remaining, stable)
                 cover_px  = int((new_cover > 0).sum())
 
-                if cover_px >= thr_px:                           # 전체의 cover_min% 이상이면 선정
+                if cover_px >= thr_px:
                     sel_mask = new_cover > 0
-                    filled[sel_mask] = img[sel_mask]             # 480p 합성 (픽셀 복사)
+                    filled[sel_mask] = img[sel_mask]
                     remaining[sel_mask] = 0
                     sel += 1
                     cv2.imwrite(str(FILLED_PATH), filled)
@@ -187,7 +181,6 @@ def main():
                     print(f"[DynBG] frame {processed} 선정#{sel} | +{cover_px/total*100:.2f}% | "
                           f"남음 {cur/total*100:.1f}% ({cur/initial*100:.0f}% of init)")
 
-                    # 점진 업스케일: 마지막 업스케일 이후 '남은 영역'이 step 만큼 줄면 ESRGAN
                     step = steps[min(up_idx, len(steps) - 1)]
                     if last_up_remaining - cur >= step * last_up_remaining:
                         _upscale(FILLED_PATH, OUT_BG, use_esrgan)
@@ -201,7 +194,7 @@ def main():
                 _rerun_depth(OUT_BG)
                 break
 
-            time.sleep(poll)   # 새 프레임 대기 (영원히 — Ctrl+C 또는 완료까지)
+            time.sleep(poll)
 
     except KeyboardInterrupt:
         print(f"\n[DynBG] 종료 — {sel}프레임 선정, 최종 업스케일")

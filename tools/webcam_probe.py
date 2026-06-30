@@ -10,7 +10,7 @@ import cv2
 import time
 from pathlib import Path
 
-IDX     = 0                # 외장 = DSHOW index 0
+IDX     = 0
 SECS    = 2.0
 OUT_DIR = Path(__file__).resolve().parent
 

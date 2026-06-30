@@ -12,7 +12,7 @@ _F_START = _DATA_DIR / ".session_start"
 _F_END   = _DATA_DIR / ".session_end"
 _F_HB    = _DATA_DIR / ".session_heartbeat"
 
-_HB_INTERVAL = 10  # seconds
+_HB_INTERVAL = 10
 
 
 def record_session_start():
@@ -42,7 +42,6 @@ def _save_preserved(archive_base: Path) -> dict:
     """model_trellis.glb / templates/ / iqData_RecordingParameters.mat 를 임시 위치에 보존."""
     saved = {}
 
-    # GLB + templates
     objects_dir = _DATA_DIR / "objects"
     if objects_dir.exists():
         for obj_dir in objects_dir.iterdir():
@@ -59,7 +58,6 @@ def _save_preserved(archive_base: Path) -> dict:
                 shutil.copytree(str(tmpl), str(tmp))
                 saved[obj_dir.name + "/__templates__"] = tmp
 
-    # RecordingParameters.mat
     mat = _DATA_DIR / "radar" / "iqData_RecordingParameters.mat"
     if mat.exists():
         saved["__recording_params_mat__"] = mat.read_bytes()
@@ -108,7 +106,6 @@ def archive_data():
     if not items:
         return
 
-    # 시작 시각
     if _F_START.exists():
         start_str = _F_START.read_text().strip()
     else:
@@ -119,7 +116,6 @@ def archive_data():
         else:
             start_str = datetime.now().strftime("%Y%m%d_%H%M")
 
-    # 종료 시각
     if _F_END.exists():
         end_str = _F_END.read_text().strip()
     elif _F_HB.exists():
@@ -130,14 +126,14 @@ def archive_data():
     folder_name = f"{start_str}~{end_str}"
     dest = _ARCHIVE_DIR / folder_name
     n = 1
-    while dest.exists():                      # 같은 분 재실행/잔여 폴더와 충돌 방지
+    while dest.exists():
         n += 1
         dest = _ARCHIVE_DIR / f"{folder_name}_{n}"
     dest.mkdir(parents=True, exist_ok=True)
 
     for item in items:
         target = dest / item.name
-        if target.exists():                  # 만일의 중첩(radar/radar) 방지
+        if target.exists():
             if target.is_dir():
                 shutil.rmtree(target, ignore_errors=True)
             else:

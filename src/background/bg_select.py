@@ -16,7 +16,6 @@ OUTPUT_PATH  = PROJECT_ROOT / "data" / "scene" / "background_raw.jpg"
 TARGETS_PATH = PROJECT_ROOT / "data" / "radar" / "targets.json"
 CAPTURE_SECS = 10
 
-# 배경 선정 가중치: 경계 선명도 0.25 + 레이더 또렷정도(최대 SNR) 0.75
 W_SHARP = 0.25
 W_RADAR = 0.75
 
@@ -55,7 +54,6 @@ def _boundary_sharpness(frame, result) -> float:
 
     h, w = frame.shape[:2]
 
-    # Lab color gradient
     lab  = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB).astype(np.float32)
     grad = np.zeros((h, w), np.float32)
     for c in range(3):
@@ -118,10 +116,8 @@ def select_background():
     print()
     sharp_arr = np.array(sharp_scores, dtype=np.float32)
     radar_arr = np.array(radar_scores, dtype=np.float32)
-    # 단위 다른 두 점수를 각각 max 로 [0,1] 정규화 후 가중합
     sn = sharp_arr / (sharp_arr.max() + 1e-8)
     rn = radar_arr / (radar_arr.max() + 1e-8)
-    # 레이더가 한 프레임도 안 잡혔으면(전부 0) 선명도만으로 폴백
     if radar_arr.max() <= 0:
         final = sn
         print("[BG] 레이더 매칭 없음 — 선명도만으로 선정")

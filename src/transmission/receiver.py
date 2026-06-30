@@ -17,13 +17,13 @@ WEBCAM_PORT = _net["webcam_port"]
 META_PORT   = _net["meta_port"]
 
 shutdown_event     = threading.Event()
-_chirp_ready       = threading.Event()   # 메타로 chirp 확정 전엔 .bin 저장 보류
+_chirp_ready       = threading.Event()
 frame_queue        = queue.Queue(maxsize=30)
 _latest_frame      = None
-_latest_frame_ts   = 0   # ms since midnight (sender 기준)
+_latest_frame_ts   = 0
 _latest_frame_lock = threading.Lock()
 
-_latest_radar      = None   # (payload_bytes, ts_ms)
+_latest_radar      = None
 _latest_radar_lock = threading.Lock()
 
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -39,11 +39,10 @@ _SHOW_LIVE   = _cfg["storage"]["show_live"]
 
 _matlab_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-# .bin 파일 저장 — chirp 수에 따라 프레임 크기 가변 (samples×rx×chirp×4byte)
 _DEFAULT_CHIRP  = _cfg["radar"]["default_chirp"]
 _BIN_FRAME_SIZE = 256 * 4 * _DEFAULT_CHIRP * 4
-_BIN_FILE_MAX   = 100 * 1024 * 1024   # 100 MB 초과 시 새 파일
-_DCA_HDR_SIZE   = 10                   # DCA1000 헤더: 4B seq + 6B byte count
+_BIN_FILE_MAX   = 100 * 1024 * 1024
+_DCA_HDR_SIZE   = 10
 _RADAR_DIR      = _PROJECT_ROOT / "data" / "radar"
 _WEBCAM_DIR     = _PROJECT_ROOT / "data" / "webcam"
 
@@ -55,7 +54,6 @@ _ts_file        = None
 _current_ts_ms  = 0
 _bin_lock       = threading.Lock()
 
-# 웹캠 프레임 저장 (레이더 .bin 과 동일한 구조: frame_NNNNNN.jpg + timestamps.csv)
 _webcam_frame_idx = 0
 _webcam_ts_file   = None
 _webcam_lock      = threading.Lock()
@@ -154,11 +152,8 @@ def radar_receive():
         with _latest_radar_lock:
             _latest_radar = (payload, ts_ms)
 
-        # 커스텀 헤더 제거 후 원본 DCA1000 패킷을 MATLAB으로 포워딩
         _matlab_sock.sendto(payload, ("127.0.0.1", _MATLAB_PORT))
 
-        # DCA1000 헤더(10B) 제거 후 ADC 바이트 누적 → 프레임 단위 .bin 저장
-        # 메타로 chirp 확정 전엔 보류 (프레임 크기를 몰라 깨진 .bin 방지)
         if _SAVE_RADAR and _chirp_ready.is_set():
             adc_bytes = payload[_DCA_HDR_SIZE:]
             with _bin_lock:
@@ -180,7 +175,7 @@ def webcam_receive():
     print(f"[Webcam] 수신 대기 중 0.0.0.0:{WEBCAM_PORT}")
 
     frames    = defaultdict(dict)
-    frame_ts  = {}   # frame_id → ts_ms
+    frame_ts  = {}
 
     while not shutdown_event.is_set():
         try:
@@ -205,7 +200,6 @@ def webcam_receive():
             arr = np.frombuffer(frame_data, np.uint8)
             frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
             if frame is not None:
-                # 수신한 JPEG 원본을 그대로 저장 (재인코딩 X)
                 if _SAVE_WEBCAM:
                     with _webcam_lock:
                         _write_webcam_frame(frame_data, ts)
@@ -230,7 +224,7 @@ def set_chirp(num_chirps: int, samples_per_chirp: int = 256, num_receivers: int 
     """chirp 수 변경에 맞춰 .bin 프레임 크기 갱신 (samples×rx×chirp×4byte)."""
     global _BIN_FRAME_SIZE
     _BIN_FRAME_SIZE = samples_per_chirp * num_receivers * num_chirps * 4
-    _chirp_ready.set()   # 이제부터 .bin 저장 허용
+    _chirp_ready.set()
     print(f"[Meta] chirp={num_chirps} → bin frame size={_BIN_FRAME_SIZE}B")
 
 
@@ -252,7 +246,7 @@ def _write_mat(meta: dict):
     print(f"[Meta] .mat 생성: {path.name}  NumChirps={rp['NumChirps']:.0f}")
 
 
-_last_meta = None   # 직전 수신 메타 — 동일하면 .mat 재생성/로그 스킵
+_last_meta = None
 
 
 def meta_receive():
@@ -292,7 +286,7 @@ def meta_receive():
             print(f"[Meta] 파싱 실패: {e}")
             continue
         if meta == _last_meta:
-            continue   # 동일 메타 재전송 — 재생성/로그 스킵
+            continue
         _last_meta = meta
         set_chirp(int(meta["NumChirps"]),
                   int(meta["SamplesPerChirp"]),
