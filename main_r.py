@@ -382,7 +382,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
         finally:
             _da3_lock.release()
 
-    registry  = {}      # tid -> {cls,bbox,conf,miss,state,glb,appearance,ratio}
+    registry  = {}      # tid -> {cls,bbox,conf,miss,state,glb,appearance,ratio,da3_0}
     graveyard = {}      # tid -> {…, evicted_at} — re-ID 대기 (TTL 내 재등록 시 같은 tid 재사용)
     _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
     _next_tid = [0]
@@ -497,28 +497,32 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     print(f"[State] {entry['cls']}_{tid} → graveyard")
 
         # ── 3. 거리 매칭 + overlay + 상태 전이 ──
-        # match_all: 거리 게이트 없이 방위각 매칭 + 겹친 물체(같은 az)는 DA3 깊이순 분리.
-        # DA3(d["mdist"])는 절대 필터가 아니라 겹침 분리 순서로만 쓴다.
         det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
-        # expected = DA3×비율(예상 미터거리). 겹침 시 점을 예상거리 최근접 객체에 배정해
-        # 약반사로 자기 점 없는 가까운 물체에 먼 점이 오배정되는 것 방지.
-        match_objs   = [{"tid": tid, "bbox": registry[tid]["bbox"],
-                         "mask": d["m_frame"], "da3": d.get("mdist"),
-                         "expected": (d["mdist"] * (registry[tid].get("ratio") or _da3_scale[0]))
-                                     if d.get("mdist") else None}
-                        for tid, d in det_by_tid.items() if tid in registry]
+        # DA3 는 정적 snapshot 이라 물체가 움직이면 그 위치 depth 가 안 맞는다.
+        # → 객체별 '첫 DA3 값'을 고정 기억(da3_0)해서 이후 그걸 쓴다(정지물체 기준).
+        for tid, d in det_by_tid.items():
+            if tid in registry and registry[tid].get("da3_0") is None and d.get("mdist"):
+                registry[tid]["da3_0"] = round(float(d["mdist"]), 3)
+        # expected = da3_0×비율(예상 미터거리). 겹침 시 점을 예상거리 최근접 객체에 배정.
+        match_objs   = []
+        for tid, d in det_by_tid.items():
+            if tid not in registry:
+                continue
+            da3 = registry[tid].get("da3_0")
+            exp = da3 * (registry[tid].get("ratio") or _da3_scale[0]) if da3 else None
+            match_objs.append({"tid": tid, "bbox": registry[tid]["bbox"],
+                               "mask": d["m_frame"], "da3": da3, "expected": exp})
         radar_by_tid = match_all(targets, match_objs, cam_cfg)
 
         # 객체별 R/DA3 비율 EMA 갱신 (레이더 실측 n>0). metric DA3 는 비선형 압축이라
         # 객체마다 비율이 다르므로(가까운 ~3, 먼 ~12) 객체별로 자기 비율을 기억한다.
         for t in radar_by_tid:
             rd = radar_by_tid[t]
-            d = det_by_tid[t].get("mdist")
-            if rd and rd["n_points"] > 0 and d and d > 0.05:
-                ratio = rd["range_m"] / d
-                old = registry[t].get("ratio") if t in registry else None
-                if t in registry:
-                    registry[t]["ratio"] = 0.7 * old + 0.3 * ratio if old else ratio
+            da3_0 = registry[t].get("da3_0") if t in registry else None
+            if rd and rd["n_points"] > 0 and da3_0 and da3_0 > 0.05:
+                ratio = rd["range_m"] / da3_0
+                old = registry[t].get("ratio")
+                registry[t]["ratio"] = 0.7 * old + 0.3 * ratio if old else ratio
         # 전역 평균 비율(한 번도 레이더에 안 잡힌 객체 fallback) — outlier robust median
         all_ratios = [registry[t]["ratio"] for t in registry if registry[t].get("ratio")]
         if all_ratios:
@@ -531,7 +535,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 continue   # 이번 프레임 미검출(miss 중)
             inst = f"{r['cls']}_{tid}"
             radar = radar_by_tid.get(tid)
-            da3 = d.get("mdist")   # DA3 거리(m) — 비교 표시 + 겹침분리용
+            da3 = r.get("da3_0")   # 객체 첫 DA3 고정값(m) — 비교 표시 + 게이트용
             o = {"name": inst, "cls": r["cls"], "conf": round(r["conf"], 2),
                  "bbox": [round(v) for v in r["bbox"]], "state": r["state"]}
             if da3 is not None:
