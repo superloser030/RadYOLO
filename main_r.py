@@ -536,7 +536,8 @@ def live_update_loop(cam_cfg, enable_pose=True):
                 prev   = r.get("r_smooth")
                 r_sm   = prev + alpha * (R_meas - prev) if prev is not None else R_meas
                 r["r_smooth"] = r_sm
-                o["range_m"] = round(r_sm, 2); o["az"] = radar["azimuth_deg"]
+                o["range_m"] = round(r_sm, 2); o["radar_m"] = round(R_meas, 2)
+                o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
                 o["snr"] = radar.get("snr")
                 fusion_lines.append(f"[Fusion] {inst:14} R {r_sm:5.2f}m(meas {R_meas:5.2f}) | {da3_str} | "
