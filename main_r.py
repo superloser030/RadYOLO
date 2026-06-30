@@ -500,8 +500,10 @@ def live_update_loop(cam_cfg, enable_pose=True):
                     r["last_az"]    = radar["azimuth_deg"]
                 o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
                 o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
+                o["snr"] = radar.get("snr")
                 fusion_lines.append(f"[Fusion] {inst:14} R {radar['range_m']:5.2f}m | {da3_str} | "
-                                    f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | {r['state']}")
+                                    f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | "
+                                    f"snr {radar.get('snr', 0):5.1f} | {r['state']}")
             else:
                 fusion_lines.append(f"[Fusion] {inst:14} miss      | {da3_str} | {r['state']}")
             overlay.append(o)

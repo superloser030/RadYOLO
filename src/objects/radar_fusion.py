@@ -204,11 +204,15 @@ def match_one(targets, bbox, cam, bbox_dist=None, last_range=None, last_az=None,
     med    = statistics.median(t["range_m"] for t in inside)
     med_az = statistics.median(t["azimuth_deg"] for t in inside)
     med_v  = statistics.median(t.get("velocity_mps", 0.0) for t in inside)
+    max_snr = max((t.get("snr", 0.0) for t in inside), default=0.0)
+    max_pow = max((t.get("power", 0.0) for t in inside), default=0.0)
     return {
         "range_m":      round(float(med), 3),
         "azimuth_deg":  round(float(med_az), 2),
         "velocity_mps": round(float(med_v), 3),
         "n_points":     len(inside),
+        "snr":          round(float(max_snr), 2),    # inside 점들 중 최대 SNR(신뢰도)
+        "power":        round(float(max_pow), 1),     # 최대 반사 강도
     }
 
 
