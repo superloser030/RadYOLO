@@ -212,7 +212,17 @@ function poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy) {
   return { vx, vy, vz, Rv, tz };
 }
 
-const MAX_TILT_DEG = 45;   // pitch/roll 최대 기울기 (yaw 는 무제한)
+const MAX_TILT_DEG   = 45;    // pitch/roll 최대 기울기 (yaw 는 무제한)
+const POSE_SCORE_MIN = 0.30;  // gigapose pose score 가 이 미만이면 회전 갱신 무시(엉뚱한 자세 차단)
+
+// 객체 3D 위치 — bbox 중심 + 융합 거리(range_m, 레이더/DA3). 배경 depth 대신 실제 객체거리.
+function posFromOverlay(o, fx, fy, cx, cy) {
+  if (o == null || o.range_m == null || !o.bbox) return null;
+  const bx = (o.bbox[0] + o.bbox[2]) / 2;
+  const by = (o.bbox[1] + o.bbox[3]) / 2;
+  const d  = o.range_m;
+  return { vx: (bx - cx) / fx * d, vy: -(by - cy) / fy * d, vz: -d };
+}
 
 function clampTilt(Rv) {
   const mat = new THREE.Matrix4().set(
@@ -266,21 +276,21 @@ function _loadOneObject(obj, depthImg, W, H, fx, fy, cx, cy) {
       applyRv(group, clampTilt(Rv));
       async function pollPos() {
         if (mode === '3d') try {
-          const live = await fetch(`/data/objects/${obj.dir}/live.json?_=${Date.now()}`).then(r => r.json());
-          if (typeof live.bbox_cx === 'number') {
-            const d = -vz;
-            const nvx = (live.bbox_cx - cx) / fx * d;
-            const nvy = -(live.bbox_cy - cy) / fy * d;
-            group.position.set(nvx, nvy, vz);
-          }
+          const ov = await fetch(`/data/scene/live_overlay.json?_=${Date.now()}`).then(r => r.json());
+          const o  = ov.find(x => x.name === obj.dir);
+          const p  = posFromOverlay(o, fx, fy, cx, cy);
+          if (p) { vz = p.vz; group.position.set(p.vx, p.vy, p.vz); group.scale.setScalar(1.0 / (-p.vz)); }
         } catch (_) {}
         setTimeout(pollPos, 200);
       }
       async function pollRot() {
         if (mode === '3d') try {
           const p2 = await fetch(`/data/objects/${obj.dir}/pose.json?_=${Date.now()}`).then(r => r.json());
-          const s2 = poseToViewerState(p2, depthImg, W, H, fx, fy, cx, cy);
-          if (s2) { ({ vz, Rv, tz } = s2); group.scale.setScalar(1.0 / tz); applyRv(group, clampTilt(Rv)); }
+          // score 게이트: 낮은 score(엉뚱한 자세)는 무시하고 직전 회전 유지
+          if (p2 && (p2.score == null || p2.score >= POSE_SCORE_MIN)) {
+            const s2 = poseToViewerState(p2, depthImg, W, H, fx, fy, cx, cy);
+            if (s2) { Rv = s2.Rv; applyRv(group, clampTilt(Rv)); }
+          }
         } catch (_) {}
         setTimeout(pollRot, 1000);
       }
