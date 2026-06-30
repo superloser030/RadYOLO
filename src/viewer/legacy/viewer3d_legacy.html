@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>RadYOLO 3D Viewer</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #111; overflow: hidden; }
+    canvas { display: block; }
+    #info {
+      position: fixed; top: 12px; left: 12px;
+      color: #aaa; font: 13px monospace;
+      pointer-events: none;
+    }
+    #loading {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font: 18px monospace; background: #111;
+    }
+    #obj-list {
+      position: fixed; top: 12px; right: 12px;
+      color: #ccc; font: 12px monospace;
+      background: rgba(0,0,0,0.55);
+      padding: 8px 12px;
+      border-radius: 6px;
+      max-width: 260px;
+    }
+    #obj-list h4 { color: #fff; margin-bottom: 4px; font-size: 13px; }
+    #obj-list .obj-entry { margin-top: 4px; line-height: 1.5; }
+    #obj-list .badge {
+      display: inline-block; padding: 1px 5px; border-radius: 3px;
+      font-size: 10px; margin-left: 4px;
+    }
+    .badge-pose  { background: #1a6e3c; color: #7fffb5; }
+    .badge-model { background: #1a3e6e; color: #7fb5ff; }
+    .badge-none  { background: #444;    color: #999; }
+  </style>
+</head>
+<body>
+<div id="loading">로딩 중...</div>
+<div id="info">
+  마우스 드래그: 회전 | 스크롤: 줌 | 우클릭 드래그: 이동<br>
+  <span id="campos"></span>
+</div>
+<div id="obj-list" style="display:none">
+  <h4>감지된 객체</h4>
+  <div id="obj-entries"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+const camera = new THREE.PerspectiveCamera(56.3, innerWidth / innerHeight, 0.001, 100);
+camera.position.set(0, 0, 0.8);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.08;
+controls.target.set(0, 0, -0.6);
+
+// 3D 모델용 조명
+const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(1, 2, 2);
+scene.add(dirLight);
+
+function getImageData(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = img.width; c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      resolve({ data: c.getContext('2d').getImageData(0, 0, img.width, img.height), w: img.width, h: img.height });
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+/**
+ * GigaPose 포즈(카메라 프레임, OpenCV: X우, Y하, Z전) →
+ * Three.js 뷰어 프레임(X우, Y상, Z후) 변환
+ *
+ * 변환 행렬: F = diag(1, -1, -1)
+ * R_view = F @ R_cam @ F^T
+ * t_view: 픽셀 투영 → depth map 룩업
+ */
+let _calib = null;  // depth_calib.json (log_linear 모델)
+
+function depthToCam(d) {
+  if (_calib && _calib.model === 'log_linear') {
+    return Math.exp(_calib.a * d + _calib.b);  // 실제 미터 단위
+  }
+  return 0.05 + (1.0 - d) * 1.2;  // 보정 없을 때 fallback
+}
+
+function poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy) {
+  const R = pose.R;
+  const [tx, ty, tz] = pose.t;
+  if (!tz || tz <= 0) return null;
+
+  const px  = Math.round(fx * tx / tz + cx);
+  const py  = Math.round(fy * ty / tz + cy);
+  const pxc = Math.max(0, Math.min(W - 1, px));
+  const pyc = Math.max(0, Math.min(H - 1, py));
+  const d   = depthImg.data.data[(pyc * W + pxc) * 4] / 255;
+
+  const dc = depthToCam(d);
+  const vx = (pxc - cx) / fx * dc;
+  const vy = -(pyc - cy) / fy * dc;
+  const vz = -dc;
+
+  const F  = [1, -1, -1];
+  const Rv = R.map((row, i) => row.map((v, j) => F[i] * v * F[j]));
+
+  return { vx, vy, vz, Rv, tz };
+}
+
+async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
+  const manifest = await fetch('/data/objects/manifest.json')
+    .then(r => r.ok ? r.json() : [])
+    .catch(() => []);
+  if (!manifest.length) return;
+
+  document.getElementById('obj-list').style.display = 'block';
+  const entriesEl = document.getElementById('obj-entries');
+  const loader    = new GLTFLoader();
+
+  for (const obj of manifest) {
+    const div = document.createElement('div');
+    div.className = 'obj-entry';
+    let badges = '';
+    if (obj.has_pose)  badges += '<span class="badge badge-pose">POSE</span>';
+    if (obj.has_model) badges += '<span class="badge badge-model">GLB</span>';
+    if (!obj.has_model && !obj.has_pose) badges += '<span class="badge badge-none">─</span>';
+    div.innerHTML = `${obj.class} <span style="color:#666">(${obj.dir})</span>${badges}`;
+    entriesEl.appendChild(div);
+
+    if (!obj.has_pose || !obj.has_model) continue;
+
+    // pose.json + template meta.json 로드
+    const [pose, tmplMeta] = await Promise.all([
+      fetch(`/data/objects/${obj.dir}/pose.json`).then(r => r.json()),
+      fetch(`/data/objects/${obj.dir}/templates/meta.json`).then(r => r.json()),
+    ]).catch(() => [null, null]);
+    if (!pose || !tmplMeta) continue;
+
+    const state = poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy);
+    if (!state) continue;
+
+    // GLB 로드
+    loader.load(
+      `/data/objects/${obj.dir}/model_trellis.glb`,
+      (gltf) => {
+        const group = new THREE.Group();
+
+        // 메쉬 정규화 (prepare_templates.py와 동일)
+        const mc = tmplMeta.mesh_center || [0, 0, 0];
+        const mr = tmplMeta.mesh_radius || 1.0;
+        gltf.scene.position.set(-mc[0], -mc[1], -mc[2]);
+        gltf.scene.scale.setScalar(0.5 / mr);
+        group.add(gltf.scene);
+        scene.add(group);
+
+        // 회전 행렬 → Three.js Matrix4 (3x3만 사용)
+        function applyRv(g, Rv) {
+          const rm = new THREE.Matrix4().set(
+            Rv[0][0], Rv[0][1], Rv[0][2], 0,
+            Rv[1][0], Rv[1][1], Rv[1][2], 0,
+            Rv[2][0], Rv[2][1], Rv[2][2], 0,
+            0, 0, 0, 1
+          );
+          g.setRotationFromMatrix(rm);
+        }
+
+        // 초기 위치·회전·스케일 설정
+        let { vx, vy, vz, Rv, tz } = state;
+        group.position.set(vx, vy, vz);
+        group.scale.setScalar(1.0 / tz);
+        applyRv(group, Rv);
+
+        console.log(`[Viewer] ${obj.dir} 배치  tz=${tz.toFixed(2)}m`);
+
+        // ── 위치 폴링 (YOLO, 200ms) ──────────────────────────────
+        async function pollPos() {
+          try {
+            const live = await fetch(`/data/objects/${obj.dir}/live.json?_=${Date.now()}`)
+              .then(r => r.json());
+            if (typeof live.bbox_cx === 'number') {
+              const nvx = (live.bbox_cx - cx) / fx;
+              const nvy = -(live.bbox_cy - cy) / fy;
+              group.position.set(nvx, nvy, vz);  // Z는 마지막 GigaPose 값 유지
+            }
+          } catch(_) {}
+          setTimeout(pollPos, 200);
+        }
+
+        // ── 회전 폴링 (GigaPose, 5s) ─────────────────────────────
+        async function pollRot() {
+          try {
+            const p2 = await fetch(`/data/objects/${obj.dir}/pose.json?_=${Date.now()}`)
+              .then(r => r.json());
+            const s2 = poseToViewerState(p2, depthImg, W, H, fx, fy, cx, cy);
+            if (s2) {
+              ({ vz, Rv, tz } = s2);          // Z와 회전 갱신
+              group.scale.setScalar(1.0 / tz);
+              applyRv(group, Rv);
+            }
+          } catch(_) {}
+          setTimeout(pollRot, 1000);
+        }
+
+        pollPos();
+        pollRot();
+      },
+      undefined,
+      (err) => console.warn(`[Viewer] ${obj.dir} GLB 로드 실패:`, err),
+    );
+  }
+}
+
+async function build() {
+  const cam = await fetch('/data/scene/camera.json').then(r => r.json());
+
+  _calib = await fetch('/data/scene/depth_calib.json')
+    .then(r => r.ok ? r.json() : null).catch(() => null);
+  if (_calib) {
+    const midZ = -(_calib.range_min_m + _calib.range_max_m) / 2;
+    camera.position.set(0, 0, 1);
+    controls.target.set(0, 0, midZ);
+    controls.update();
+    console.log(`[Viewer] calib 로드: ${_calib.range_min_m.toFixed(2)}~${_calib.range_max_m.toFixed(2)}m`);
+  }
+
+  const hasMask = await fetch('/data/scene/mask.png', { method: 'HEAD' }).then(r => r.ok).catch(() => false);
+  const loads = [getImageData('/data/scene/background.jpg'), getImageData('/data/scene/depth.png')];
+  if (hasMask) loads.push(getImageData('/data/scene/mask.png'));
+  const [color, depth, maskImg] = await Promise.all(loads);
+
+  camera.fov = cam.vfov_deg;
+  camera.updateProjectionMatrix();
+
+  const W = color.w, H = color.h;
+  const STEP = 2;
+  const fx = cam.fx, fy = cam.fy, cx = cam.cx, cy = cam.cy;
+
+  const cols = Math.floor(W / STEP);
+  const rows = Math.floor(H / STEP);
+
+  const positions = new Float32Array(cols * rows * 3);
+  const colors    = new Float32Array(cols * rows * 3);
+  let   count     = 0;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const px = c * STEP;
+      const py = r * STEP;
+      const pi = (py * W + px) * 4;
+
+      if (maskImg && maskImg.data.data[pi] > 128) continue;
+
+      const d  = depth.data.data[pi] / 255;
+      const dc = depthToCam(d);
+
+      positions[count*3]   = (px - cx) / fx * dc;
+      positions[count*3+1] = -(py - cy) / fy * dc;
+      positions[count*3+2] = -dc;
+
+      colors[count*3]   = color.data.data[pi]   / 255;
+      colors[count*3+1] = color.data.data[pi+1] / 255;
+      colors[count*3+2] = color.data.data[pi+2] / 255;
+
+      count++;
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, count * 3), 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(colors.slice(0, count * 3), 3));
+
+  const mat = new THREE.PointsMaterial({
+    vertexColors: true,
+    size: 0.003,
+    sizeAttenuation: true,
+  });
+
+  scene.add(new THREE.Points(geo, mat));
+  document.getElementById('loading').style.display = 'none';
+
+  // 3D 모델 오버레이 (포즈가 있는 객체)
+  await loadObjects(depth, W, H, fx, fy, cx, cy);
+}
+
+const camPos = document.getElementById('campos');
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+  const p = camera.position;
+  camPos.textContent = `카메라  X: ${p.x.toFixed(3)}  Y: ${p.y.toFixed(3)}  Z: ${p.z.toFixed(3)}`;
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+build().catch(e => {
+  document.getElementById('loading').textContent = '로드 실패: ' + e.message;
+});
+animate();
+</script>
+</body>
+</html>

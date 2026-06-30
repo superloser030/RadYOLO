@@ -3,7 +3,10 @@ import numpy as np
 from pathlib import Path
 from ultralytics import YOLO
 
+from src.utils.config import load_receiver
+
 PROJECT_ROOT   = Path(__file__).resolve().parent.parent.parent
+_MASK_CONF     = load_receiver().get("yolo", {}).get("mask_conf", 0.4)
 MODEL_PATH     = PROJECT_ROOT / "models" / "yolo11x-seg.pt"
 INPUT_PATH     = PROJECT_ROOT / "data" / "scene" / "background.jpg"
 OUTPUT_MASK    = PROJECT_ROOT / "data" / "scene" / "mask.png"
@@ -13,7 +16,7 @@ OUTPUT_PREVIEW = PROJECT_ROOT / "data" / "scene" / "mask_preview.jpg"
 def generate_mask():
     OUTPUT_MASK.parent.mkdir(parents=True, exist_ok=True)
     model   = YOLO(str(MODEL_PATH))
-    results = model(str(INPUT_PATH), conf=0.3)
+    results = model(str(INPUT_PATH), conf=_MASK_CONF)
 
     img = cv2.imread(str(INPUT_PATH))
     h, w = img.shape[:2]

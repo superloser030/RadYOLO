@@ -24,7 +24,7 @@ from src.background.bg_select   import select_background
 from src.background.upscale     import upscale_image
 from src.background.depth            import generate_depth
 from src.background.depth_calibration import calibrate_depth
-from src.background.yolo_mask   import generate_mask
+from src.background.yolo_mask   import generate_mask    
 from src.objects.obj_crop       import crop_objects
 from src.objects.trellis_gen    import generate_3d
 
@@ -109,22 +109,123 @@ def _run_pose_bg(obj_dir, frame_path, bbox, cam_cfg):
         print(f"[Live-R] {obj_dir.name}: score={pose.get('score',0):.3f}  t={[round(v,3) for v in pose['t']]}")
 
 
-def live_update_loop(cam_cfg):
-    """라이브 루프: YOLO 위치(0.3s) + GigaPose 회전(이전 추론 완료 즉시) 갱신."""
+def live_update_loop(cam_cfg, enable_pose=True):
+    """라이브 상태머신: YOLO-seg 추적 + 레이더거리 + 객체 상태(NEW→MODELING→READY).
+
+    1단계: 단일뷰, re-ID 없음(IoU+miss 추적). crop/3D/pose 를 이벤트화 — 새 물체가
+    obj_conf 로 등록되고 model_conf 를 넘으면 DA3 재추론(거리)+crop+fal.ai 3D(백그라운드)
+    → READY 시 GigaPose pose. enable_pose=False 면 추적/거리만(3D/pose 안 함).
+    """
     import time, cv2
+    import numpy as np
     from ultralytics import YOLO
-    from src.objects.radar_fusion import load_latest_targets, match_one
+    from src.objects.radar_fusion import load_latest_targets, match_one, depth_to_range, iou
+    from src.objects.obj_crop import load_sam2, crop_one, SKIP_CLASSES
+    from src.objects.trellis_gen import generate_3d
+    from src.background.depth import generate_depth
+    from src.background.upscale import upscale_image
+    from src.background.depth_calibration import apply_calib
+    from src.utils.config import load_receiver
 
     YOLO_MODEL   = str(PROJECT_ROOT / "models" / "yolo11x-seg.pt")
     TARGETS_PATH = PROJECT_ROOT / "data" / "radar" / "targets.json"
+    SCENE        = PROJECT_ROOT / "data" / "scene"
+    DEPTH_PATH   = SCENE / "depth.png"
+    CALIB_PATH   = SCENE / "depth_calib.json"
+    OBJECTS_DIR  = PROJECT_ROOT / "data" / "objects"
+    DA3_INPUT    = SCENE / "da3_frame.jpg"   # 새 물체 DA3 재추론 입력(배경 안 건드림)
 
-    yolo = YOLO(YOLO_MODEL)
-    objects_dir = PROJECT_ROOT / "data" / "objects"
+    ycfg        = load_receiver().get("yolo", {})
+    obj_conf    = float(ycfg.get("obj_conf",   0.72))   # 객체 등록 게이트
+    model_conf  = float(ycfg.get("model_conf", 0.85))   # 3D+pose 게이트
+    live_conf   = float(ycfg.get("live_conf",  0.5))
+    detect_conf = min(live_conf, obj_conf)   # 검출은 낮게(추적 안정), 등록만 obj_conf
+
+    # 배경 depth + 보정계수 — 새 물체 DA3 재추론에 같은 계수 재적용. 리스트로 nonlocal 흉내.
+    _depth = [None]; _depth_calib = [None]
+    def _reload_depth():
+        try:
+            if DEPTH_PATH.exists() and CALIB_PATH.exists():
+                d = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
+                if d is not None and d.ndim != 2:
+                    d = d[:, :, 0]
+                _depth[0] = d
+                _depth_calib[0] = json.loads(CALIB_PATH.read_text())
+        except Exception:
+            pass
+    _reload_depth()
+    if _depth[0] is not None:
+        print("[Fusion] DA3 depth 게이트 활성")
+
+    yolo  = YOLO(YOLO_MODEL)
     cam_w = cam_cfg.get("width",  1920)
     cam_h = cam_cfg.get("height", 1080)
-    inferring = {}   # obj_name → bool
-    _last_fusion = 0.0   # [Fusion] 콘솔 출력 throttle (1초)
-    _range_ema = {}      # obj_name → 평활된 거리 (노이즈 완화)
+    _sam2 = [None]
+    def _get_sam2():
+        if _sam2[0] is None:
+            print("[State] SAM2 lazy 로드...")
+            _sam2[0] = load_sam2()
+        return _sam2[0]
+    _sam2_lock = threading.Lock()   # SAM2 단일 인스턴스 동시 호출 직렬화
+    _da3_lock  = threading.Lock()   # DA3 재추론 공유(동시 MODELING 시 1회만)
+    _da3_last  = [0.0]
+
+    def _mask_dist(m_frame, cx, cy):
+        """마스크 영역 DA3 거리 median(m). 마스크 없으면 (cx,cy) 1점. depth 없으면 None."""
+        dep, cal = _depth[0], _depth_calib[0]
+        if dep is None or cal is None:
+            return None
+        dh, dw = dep.shape[:2]
+        if m_frame is not None:
+            mm = cv2.resize(m_frame, (dw, dh)) if (dh, dw) != m_frame.shape else m_frame
+            vals = dep[mm > 0.5]
+            if len(vals) > 0:
+                return depth_to_range(float(np.median(vals)) / 255.0, cal)
+        bx = max(0, min(dw - 1, int(cx * dw / cam_w)))
+        by = max(0, min(dh - 1, int(cy * dh / cam_h)))
+        return depth_to_range(dep[by, bx] / 255.0, cal)
+
+    def _da3_rerun(frame_raw):
+        """새 물체용: 현재 프레임 → ESRGAN 업스케일 → DA3 (배경과 '동일' 파이프라인)
+        → depth.png 갱신(같은 보정계수 재적용). background.jpg(씬 배경)는 안 건드림.
+        ※ 배경도 ESRGAN 후 DA3 이므로, 재추론도 같은 화질 경로를 타야 depth 가 일관됨."""
+        try:
+            raw = SCENE / "da3_raw.jpg"
+            up  = SCENE / "da3_up.jpg"
+            cv2.imwrite(str(raw), frame_raw)
+            upscale_image(input_path=str(raw), output_path=str(up))   # ESRGAN (배경과 동일)
+            generate_depth(input_path=str(up))
+            cal = _depth_calib[0]
+            if cal is not None:
+                d = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
+                if d is not None:
+                    if d.ndim != 2:
+                        d = d[:, :, 0]
+                    cn = apply_calib(d.astype(np.float32) / 255.0, cal)
+                    cv2.imwrite(str(DEPTH_PATH), (cn * 255).astype(np.uint8))
+            _reload_depth()
+            print("[State] DA3 재추론 → depth 갱신")
+        except Exception as e:
+            print(f"[State] DA3 재추론 실패: {e}")
+
+    def _da3_rerun_shared(frame_big):
+        """동시 MODELING 여러 개여도 DA3 재추론 1회만(락 + 5초 디바운스). depth 는 전체
+        프레임이라 객체마다 돌릴 필요 없음 → 중복/충돌 방지."""
+        if not _da3_lock.acquire(blocking=False):
+            return                          # 이미 누가 재추론 중 → 공유(스킵)
+        try:
+            if time.time() - _da3_last[0] < 5.0:
+                return                      # 최근 5초 내 했으면 재사용
+            _da3_rerun(frame_big)
+            _da3_last[0] = time.time()
+        finally:
+            _da3_lock.release()
+
+    registry  = {}      # tid -> {cls,bbox,conf,miss,state,last_range,glb}
+    _busy     = {}      # tid / f"pose{tid}" -> bool (백그라운드 진행 가드)
+    _next_tid = [0]
+    MISS_MAX, IOU_TH = 5, 0.15
+    _last_fusion = 0.0
 
     while not receiver.shutdown_event.is_set():
         frame = receiver.get_latest_frame()
@@ -135,90 +236,139 @@ def live_update_loop(cam_cfg):
         fh, fw = frame.shape[:2]
         sx = cam_w / fw
         sy = cam_h / fh
-
-        # 웹캠 프레임 ts(=레이더 targets 와 같은 시계)로 동기된 레이더 target 로드
         frame_ts = receiver.get_latest_frame_ts()
         targets  = load_latest_targets(TARGETS_PATH, frame_ts)
 
-        results = yolo(frame, verbose=False, conf=0.4)
+        results = yolo(frame, verbose=False, conf=detect_conf)
+        masks = results[0].masks
 
-        if not objects_dir.exists():
-            time.sleep(0.3)
-            continue
+        # ── 1. 검출 정리 (마스크 tight bbox + DA3 거리) ──
+        dets = []
+        for i in range(len(results[0].boxes)):
+            box  = results[0].boxes[i]
+            name = yolo.names[int(box.cls[0])]
+            conf = float(box.conf[0])
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            mbbox = [x1 * sx, y1 * sy, x2 * sx, y2 * sy]
+            cx, cy = (x1 + x2) / 2 * sx, (y1 + y2) / 2 * sy
+            m_frame = None
+            if masks is not None and i < len(masks.data):
+                m = masks.data[i].cpu().numpy()
+                if m.shape != (fh, fw):
+                    m = cv2.resize(m, (fw, fh))
+                ys, xs = np.where(m > 0.5)
+                if len(xs) > 0:
+                    mbbox = [float(xs.min()) * sx, float(ys.min()) * sy,
+                             float(xs.max()) * sx, float(ys.max()) * sy]
+                    m_frame = m
+            dets.append({"name": name, "conf": conf, "bbox": mbbox, "m_frame": m_frame,
+                         "mdist": _mask_dist(m_frame, cx, cy),
+                         "cx": (mbbox[0]+mbbox[2])/2, "cy": (mbbox[1]+mbbox[3])/2, "tid": None})
 
-        fusion_lines = []
-        overlay = []          # 2D 뷰어용: 객체별 bbox + 거리
-        for obj_dir in sorted(objects_dir.iterdir()):
-            if not obj_dir.is_dir():
+        # ── 2. IoU+중심 매칭 → registry 갱신/등록 (re-ID 는 2단계) ──
+        matched = set()
+        for d in dets:
+            bw = max(1.0, d["bbox"][2] - d["bbox"][0])
+            best_tid, best_sc = None, IOU_TH
+            for tid, r in registry.items():
+                if tid in matched or r["cls"] != d["name"]:
+                    continue
+                sc = iou(d["bbox"], r["bbox"])
+                pcx, pcy = (r["bbox"][0]+r["bbox"][2])/2, (r["bbox"][1]+r["bbox"][3])/2
+                if ((d["cx"]-pcx)**2 + (d["cy"]-pcy)**2) ** 0.5 < bw * 0.5:
+                    sc = max(sc, 0.2)
+                if sc > best_sc:
+                    best_sc, best_tid = sc, tid
+            if best_tid is not None:
+                d["tid"] = best_tid; matched.add(best_tid)
+                r = registry[best_tid]
+                r["bbox"] = d["bbox"]; r["conf"] = max(r["conf"], d["conf"]); r["miss"] = 0
+            elif d["conf"] >= obj_conf:   # 새 객체는 obj_conf 통과 시만 등록
+                tid = _next_tid[0]; _next_tid[0] += 1
+                d["tid"] = tid; matched.add(tid)
+                registry[tid] = {"cls": d["name"], "bbox": d["bbox"], "conf": d["conf"],
+                                 "miss": 0, "state": "NEW", "last_range": None, "glb": None}
+
+        # 미매칭 registry: miss++ → 제거 (2단계엔 graveyard 이동)
+        for tid in list(registry):
+            if tid not in matched:
+                registry[tid]["miss"] += 1
+                if registry[tid]["miss"] > MISS_MAX:
+                    registry.pop(tid, None)
+                    _busy.pop(tid, None); _busy.pop(f"pose{tid}", None)
+
+        # ── 3. 거리 매칭 + overlay + 상태 전이 ──
+        det_by_tid   = {d["tid"]: d for d in dets if d["tid"] is not None}
+        fusion_lines = []; overlay = []
+        for tid, r in list(registry.items()):
+            d = det_by_tid.get(tid)
+            if d is None:
+                continue   # 이번 프레임 미검출(miss 중)
+            inst = f"{r['cls']}_{tid}"
+            radar = match_one(targets, r["bbox"], cam_cfg, bbox_dist=d["mdist"],
+                              last_range=r.get("last_range"), mask=d["m_frame"])
+            o = {"name": inst, "cls": r["cls"], "conf": round(r["conf"], 2),
+                 "bbox": [round(v) for v in r["bbox"]], "state": r["state"]}
+            if radar:
+                r["last_range"] = radar["range_m"]
+                o["range_m"] = radar["range_m"]; o["az"] = radar["azimuth_deg"]
+                o["v"] = radar["velocity_mps"];  o["n"]  = radar.get("n_points")
+                fusion_lines.append(f"[Fusion] {inst:14} {radar['range_m']:6.2f}m | "
+                                    f"az {radar['azimuth_deg']:+6.1f} | n {radar.get('n_points')} | {r['state']}")
+            else:
+                fusion_lines.append(f"[Fusion] {inst:14} miss | {r['state']}")
+            overlay.append(o)
+
+            if not enable_pose:
                 continue
-            meta_p = obj_dir / "meta.json"
-            if not meta_p.exists():
-                continue
-            meta = json.loads(meta_p.read_text())
-            cls  = meta.get("class", "")
-
-            best = None
-            for box in results[0].boxes:
-                name = yolo.names[int(box.cls[0])]
-                if name == cls:
-                    x1, y1, x2, y2 = box.xyxy[0].tolist()
-                    conf = float(box.conf[0])
-                    if best is None or conf > best["conf"]:
-                        best = {
-                            "bbox_cx": (x1 + x2) / 2 * sx,
-                            "bbox_cy": (y1 + y2) / 2 * sy,
-                            "bbox":    [x1*sx, y1*sy, x2*sx, y2*sy],
-                            "conf":    conf,
-                            "ts":      time.time(),
-                        }
-
-            if best:
-                # 레이더 거리/방위/속도 매칭 (bbox 가로 범위 안 target)
-                radar = match_one(targets, best["bbox"], cam_cfg)
-                if radar:
-                    # 거리 시간평균(EMA) — 노이즈로 튀는 거리 완화 (60% 이전 + 40% 신규)
-                    _k = obj_dir.name
-                    _prev = _range_ema.get(_k)
-                    if _prev is not None:
-                        radar["range_m"] = round(0.6 * _prev + 0.4 * radar["range_m"], 3)
-                    _range_ema[_k] = radar["range_m"]
-                    best.update(radar)   # range_m, azimuth_deg, velocity_mps
-                    fusion_lines.append(
-                        f"[Fusion] {obj_dir.name:12} {radar['range_m']:6.2f}m | "
-                        f"az {radar['azimuth_deg']:+6.1f} | v {radar['velocity_mps']:+5.2f}")
-                else:
-                    fusion_lines.append(f"[Fusion] {obj_dir.name:12} miss")
-                (obj_dir / "live.json").write_text(json.dumps(best))
-                overlay.append({
-                    "name":    obj_dir.name,
-                    "cls":     cls,
-                    "bbox":    [round(v) for v in best["bbox"]],
-                    "range_m": best.get("range_m"),
-                    "az":      best.get("azimuth_deg"),
-                })
-
-                # 이전 추론이 끝난 즉시 다음 추론 시작
-                key = obj_dir.name
-                if not inferring.get(key, False):
-                    inferring[key] = True
-                    frame_path = str(obj_dir / "live_frame.jpg")
-                    up = cv2.resize(frame, (cam_w, cam_h), interpolation=cv2.INTER_LINEAR)
-                    cv2.imwrite(frame_path, up)
-
-                    def _launch(od=obj_dir, fp=frame_path, bbox=best["bbox"], k=key):
+            # NEW →(model_conf)→ MODELING: DA3 재추론 + crop + fal.ai 3D (백그라운드)
+            if (r["state"] == "NEW" and r["conf"] >= model_conf
+                    and r["cls"] not in SKIP_CLASSES and not _busy.get(tid)):
+                _busy[tid] = True; r["state"] = "MODELING"
+                big = cv2.resize(frame, (cam_w, cam_h))   # crop/SAM2 용 (1920)
+                raw = frame.copy()                         # DA3 ESRGAN 용 (원본 해상도)
+                bb  = list(r["bbox"]); cls_name = r["cls"]
+                def _model_bg(tid=tid, big=big, raw=raw, bb=bb, cls_name=cls_name):
+                    try:
+                        _da3_rerun_shared(raw)          # 원본→ESRGAN→DA3 (배경과 동일 경로)
+                        with _sam2_lock:                # SAM2 동시 호출 직렬화
+                            sam = _get_sam2()
+                            sam.set_image(cv2.cvtColor(big, cv2.COLOR_BGR2RGB))
+                            od = crop_one(big, bb, cls_name, tid, sam)
+                        generate_3d(od)                 # fal.ai 원격(동시 OK)
+                        if tid in registry:
+                            registry[tid]["state"] = "READY"
+                            registry[tid]["glb"]   = str(od / "model_trellis.glb")
+                        print(f"[State] {cls_name}_{tid} → READY")
+                    except Exception as e:
+                        print(f"[State] {cls_name}_{tid} MODELING 실패: {e}")
+                        if tid in registry:
+                            registry[tid]["state"] = "NEW"
+                    finally:
+                        _busy[tid] = False
+                threading.Thread(target=_model_bg, daemon=True).start()
+            # READY → GigaPose pose (백그라운드)
+            elif r["state"] == "READY" and not _busy.get(f"pose{tid}"):
+                od = OBJECTS_DIR / f"{r['cls']}_{tid}"
+                if (od / "model_trellis.glb").exists():
+                    _busy[f"pose{tid}"] = True
+                    fp = str(od / "live_frame.jpg")
+                    cv2.imwrite(fp, cv2.resize(frame, (cam_w, cam_h)))
+                    bb = list(r["bbox"])
+                    def _pose_bg(od=od, fp=fp, bb=bb, tid=tid):
                         try:
-                            _run_pose_bg(od, fp, bbox, cam_cfg)
+                            from src.objects.pose_estimator import prepare_templates
+                            prepare_templates(str(od / "model_trellis.glb"), str(od / "templates"))
+                            _run_pose_bg(od, fp, bb, cam_cfg)
                         finally:
-                            inferring[k] = False
+                            _busy[f"pose{tid}"] = False
+                    threading.Thread(target=_pose_bg, daemon=True).start()
 
-                    threading.Thread(target=_launch, daemon=True).start()
-
-        # 2D 뷰어 오버레이 (매 루프 갱신)
-        (PROJECT_ROOT / "data" / "scene" / "live_overlay.json").write_text(json.dumps(overlay))
+        (SCENE / "live_overlay.json").write_text(json.dumps(overlay))
 
         now = time.time()
         if now - _last_fusion >= 1.0:
-            print(f"--- radar targets: {len(targets)} ---")
+            print(f"--- radar targets: {len(targets)} | registry {len(registry)} ---")
             for ln in fusion_lines:
                 print(ln)
             _last_fusion = now
@@ -240,9 +390,11 @@ def _start_iperf_server():
 
 
 def _start_matlab_cfar():
-    """레이더 실시간 CFAR(cfar_detect_live.m)을 MATLAB 배치로 자동 실행.
+    """레이더 실시간 추적(radar_live.m)을 MATLAB 배치로 자동 실행.
 
-    .mat 생성(메타 수신) 후에 호출할 것. 출력은 data/radar/cfar_live.log 로.
+    예제 모듈 조립 파이프라인(readRadarCube→…→trackObjects). 옛 cfar_detect_live.m
+    은 legacy_matlab/ 으로 archive 됨.
+    .mat 생성(메타 수신) 후에 호출할 것. 출력은 logs/radar_live_*.log 로.
     matlab 명령이 PATH 에 없으면 None (수동 실행 필요).
     """
     import datetime as _dt
@@ -250,18 +402,40 @@ def _start_matlab_cfar():
     # 로그는 data/ 밖(logs/)에 타임스탬프로 — archive 이동/좀비 잠금과 무관하게
     log_dir = PROJECT_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)
-    log_path = log_dir / f"cfar_live_{_dt.datetime.now():%H%M%S}.log"
+    log_path = log_dir / f"radar_live_{_dt.datetime.now():%H%M%S}.log"
     try:
         log = open(log_path, "w")
         proc = subprocess.Popen(
-            ["matlab", "-batch", "cfar_detect_live"],
+            ["matlab", "-batch", "radar_live"],
             cwd=str(matlab_dir),
             stdout=log, stderr=subprocess.STDOUT)
-        print(f"[Radar] MATLAB cfar_detect_live 자동 시작 (로그: logs/{log_path.name})")
+        print(f"[Radar] MATLAB radar_live 자동 시작 (로그: logs/{log_path.name})")
         return proc
     except FileNotFoundError:
-        print("[Radar] 'matlab' 명령 못 찾음 — cfar_detect_live.m 수동 실행 필요")
+        print("[Radar] 'matlab' 명령 못 찾음 — radar_live.m 수동 실행 필요")
         return None
+
+
+def _verify_intake(secs=3.0):
+    """레이더 targets + 웹캠 프레임이 실제로 들어오는지 secs 초 확인(형식 검증)."""
+    import time as _t
+    targets_path = PROJECT_ROOT / "data" / "radar" / "targets.json"
+    t0 = _t.time(); got_cam = got_radar = False
+    while _t.time() - t0 < secs:
+        if receiver.get_latest_frame() is not None:
+            got_cam = True
+        try:
+            if targets_path.exists() and json.loads(targets_path.read_text()):
+                got_radar = True
+        except Exception:
+            pass
+        if got_cam and got_radar:
+            break
+        _t.sleep(0.2)
+    print(f"[Init] 수신 확인({secs:.0f}s) — 웹캠:{'OK' if got_cam else '없음'} "
+          f"레이더:{'OK' if got_radar else '아직(radar_live 준비 중일 수 있음 — 진행)'}")
+    if not got_cam:
+        print("[Init] ⚠ 웹캠 프레임 미수신 — 센더/네트워크 확인 필요")
 
 
 class _ViewerHandler(http.server.SimpleHTTPRequestHandler):
@@ -305,13 +479,16 @@ def _start_viewer(port=8000):
     # (archive_data 가 data/ 를 비운 뒤여야 하므로 viewer 시작 시점에 생성)
     export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")
     os.chdir(PROJECT_ROOT)
-    server = http.server.ThreadingHTTPServer(("localhost", port), _ViewerHandler)
-    url2d = f"http://localhost:{port}/src/viewer/viewer2d.html"
-    url3d = f"http://localhost:{port}/src/viewer/viewer.html"
-    threading.Timer(0.5, lambda: webbrowser.open(url2d)).start()
-    print(f"\n=== 뷰어 시작 ===")
-    print(f"[Server] 2D: {url2d}")
-    print(f"[Server] 3D: {url3d}   (Ctrl+C로 종료)")
+    # Tailscale IP 에 바인드 → 휴대폰 등 Tailscale 기기에서 외부 접근(외부인 차단).
+    # network.toml 의 desktop_ip(데스크톱 Tailscale IP)를 사용.
+    from src.utils.config import load_network
+    host = load_network().get("desktop_ip", "0.0.0.0")
+    server = http.server.ThreadingHTTPServer((host, port), _ViewerHandler)
+    url = f"http://{host}:{port}/src/viewer/viewer.html"
+    threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    print(f"\n=== 뷰어 시작 (통합 2D/3D + 콘솔) ===")
+    print(f"[Server] {url}")
+    print(f"[Server] 휴대폰: Tailscale 켜고 같은 주소 접속  (Ctrl+C로 종료)")
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
 
@@ -324,6 +501,10 @@ if __name__ == "__main__":
     parser.add_argument("--skip-3d",    action="store_true", help="Trellis 3D 모델 생성 건너뜀")
     parser.add_argument("--skip-calib", action="store_true", help="레이더 기반 depth 보정 건너뜀")
     parser.add_argument("--viewer-only", action="store_true", help="뷰어만 시작")
+    parser.add_argument("--verify", action="store_true",
+                        help="경량 검증: 수신+radar+YOLO박스+뷰어만 (배경/depth/crop/3D 전부 스킵)")
+    parser.add_argument("--calib", action="store_true",
+                        help="외부 캘리브: verify 경량 파이프라인 + 레이더↔카메라 yaw/baseline 추정 스레드")
     args = parser.parse_args()
 
     cam_cfg = load_camera()
@@ -331,7 +512,42 @@ if __name__ == "__main__":
     _iperf_proc  = None
     _matlab_proc = None
 
-    if not args.viewer_only:
+    if args.verify or args.calib:
+        # verify 와 calib 은 같은 경량 파이프라인(수신+radar+YOLO박스+뷰어).
+        # calib 은 여기에 레이더↔카메라 yaw/baseline 추정 스레드만 추가로 얹는다.
+        mode = "외부 캘리브" if args.calib else "경량 검증"
+        print(f"=== {mode} 모드 (수신 + radar + YOLO박스 + 뷰어, 무거운 단계 전부 스킵) ===")
+        archive_data()
+        record_session_start()
+        start_heartbeat_thread()
+        _iperf_proc = _start_iperf_server()
+        threading.Thread(target=meta_receive,   daemon=True).start()
+        threading.Thread(target=radar_receive,  daemon=True).start()
+        threading.Thread(target=webcam_receive, daemon=True).start()
+        import time as _vt
+        print("[Init] 레이더 메타 수신 대기...")
+        if receiver._chirp_ready.wait(timeout=20):
+            print("[Init] 메타 확정 — 2초 후 radar_live 시작")
+            _vt.sleep(2)
+            _matlab_proc = _start_matlab_cfar()
+        else:
+            print("[Init] 메타 타임아웃(20s) — 웹캠만 (레이더 미시작)")
+        _http_server = _start_viewer()
+        t_live = threading.Thread(target=live_update_loop, args=(cam_cfg, False), daemon=True)
+        t_live.start()
+        print("[Live] YOLO 박스 + 레이더 거리 스레드 시작 (pose 끔)")
+
+        if args.calib:
+            from src.utils.radar_cam_calib import calibrate_loop
+            threading.Thread(
+                target=calibrate_loop,
+                args=(cam_cfg, receiver.shutdown_event),
+                daemon=True,
+            ).start()
+            print("[Calib] 외부 캘리브 스레드 시작 — 물체를 중앙에서 좌우로 움직이세요.")
+            print("[Calib] 수렴 시 config/calib_radar_cam.json 자동 저장 (Ctrl+C 로 종료)")
+
+    elif not args.viewer_only:
         print("=== 이전 data/ 아카이브 중 ===")
         archive_data()
         record_session_start()
@@ -356,6 +572,9 @@ if __name__ == "__main__":
         else:
             print("[Init] 메타 타임아웃(20s) — 웹캠만으로 진행 (레이더 CFAR 미시작)")
 
+        print("\n=== Step 0.5: 레이더+웹캠 수신 확인 (3초) ===")
+        _verify_intake(3.0)
+
         if not args.skip_bg:
             print("=== Step 1: 배경 프레임 선택 (10초) ===")
             select_background()
@@ -373,10 +592,11 @@ if __name__ == "__main__":
             generate_depth()
         else:
             print("\n=== Step 3: 건너뜀 (--skip-depth) ===")
-        GPUManager.release("ESRGAN/DA3", comfyui=True)   # ComfyUI 모델 언로드
+        # DA3 상주(release 안 함) — 라이브에서 새 물체 등장 시 즉시 재추론하기 위함.
+        # (ESRGAN 도 같이 상주, VRAM 16GB 여유. 기존 GPUManager.release 제거)
 
         if not args.skip_calib:
-            print("\n=== Step 3.5: 레이더 기반 depth 보정 ===")
+            print("\n=== Step 3.5: 레이더 기반 depth 보정 (계수 산출) ===")
             try:
                 calibrate_depth()
             except Exception as e:
@@ -384,31 +604,25 @@ if __name__ == "__main__":
         else:
             print("\n=== Step 3.5: 건너뜀 (--skip-calib) ===")
 
-        print("\n=== Step 4: YOLO 마스크 생성 ===")
+        print("\n=== Step 4: 첫 마스크 (초기 객체 식별 + 배경 구멍) ===")
         generate_mask()
 
-        # 배경/깊이/마스크 준비 완료 → 뷰어 열기 (3D 모델은 이후 추가됨)
+        # 배경/깊이/마스크 준비 완료 → 뷰어 열기.
+        # crop/3D/pose 는 시작 1회가 아니라 live_update_loop 상태머신이 이벤트로 처리
+        # (새 물체 등장 → NEW→DA3재추론→crop→fal.ai 3D→READY→GigaPose pose).
         _http_server = _start_viewer()
 
-        print("\n=== Step 5: 객체 크롭 + depth 마스크 정제 ===")
-        crop_objects()
-
-        if not args.skip_3d:
-            print("\n=== Step 5.3: Trellis 3D 모델 생성 ===")
-            objects_dir = PROJECT_ROOT / "data" / "objects"
-            if objects_dir.exists():
-                for obj_dir in sorted(objects_dir.iterdir()):
-                    if obj_dir.is_dir() and (obj_dir / "cutout.jpg").exists():
-                        generate_3d(obj_dir)
-
-            print("\n=== Step 5.5: GLB 모델 포즈 추정 ===")
-            estimate_object_poses()
-        else:
-            print("\n=== Step 5.3/5.5: 건너뜀 (--skip-3d) ===")
-
-        t_live = threading.Thread(target=live_update_loop, args=(cam_cfg,), daemon=True)
+        t_live = threading.Thread(target=live_update_loop,
+                                  args=(cam_cfg, not args.skip_3d), daemon=True)
         t_live.start()
-        print("[Live] YOLO 위치 / GigaPose 회전 갱신 스레드 시작")
+        print(f"[Live] 상태머신 스레드 시작 (pose={'켬' if not args.skip_3d else '끔'})")
+
+        # 동적 배경 채우기 백그라운드 (receiver.toml [dynamic_bg] enabled)
+        from src.utils.config import load_receiver
+        if load_receiver().get("dynamic_bg", {}).get("enabled", True):
+            from src.background.dynamic_bg_fill import main as _dynbg_main
+            threading.Thread(target=_dynbg_main, daemon=True).start()
+            print("[DynBG] 동적 배경 채우기 스레드 시작")
 
     else:
         _http_server = _start_viewer()

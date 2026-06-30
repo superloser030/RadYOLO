@@ -15,3 +15,28 @@ show_live   = true    # 'Webcam Live' 미리보기 창 표시 (q 로 종료)
 # 수신측 .bin 프레임 크기 결정용 chirp 수.
 # 센더가 meta(TCP)로 알려주기 전까지 쓰는 기본값. (samples256×rx4×chirp×4byte)
 default_chirp = 32
+
+[dynamic_bg]
+# 동적 배경 채우기 (dynamic_bg_fill.py). 객체가 비켜나 드러난 영역으로 배경 구멍을 메움.
+enabled       = true
+cover_min     = 0.005              # 선정 최소: 전체 화면의 0.5% 이상 새로 채우는 프레임만 합성
+                                   # (해상도 무관 %, 노이즈/마스크 가장자리 흔들림 거르기)
+upscale_steps = [0.20, 0.25, 0.30] # 남은 영역이 줄어든 누적량이 이만큼일 때마다 ESRGAN 업스케일
+                                   # 1번째 20%, 2번째 25%, 3번째~ 30% (초반 자주→후반 뜸)
+upscale       = true               # true=ESRGAN(ComfyUI), false=lanczos(cv2)
+poll_sec      = 1.0                # 새 프레임 폴링 간격(s)
+mask_dilate_px = 15                # YOLO 마스크 팽창(px) — 손가락/머리카락 등 가장자리 잔상 제거
+                                   # 클수록 객체를 넉넉히 잡음(잔상↓, 채울영역↓). 0=끔
+
+[yolo]
+# YOLO 검출 신뢰도 기준 — 용도별로 다르게.
+mask_conf  = 0.55   # 가림 마스킹(배경 채우기/배경 구멍) — 빠짐없이 가리되 노이즈는 배제
+obj_conf   = 0.72   # 객체 판단(registry 등록/추적, 첫 마스크 초기객체 식별) — 진짜 객체만
+model_conf = 0.85   # 3D 모델링 + GigaPose pose — 매우 확실한 것만
+live_conf  = 0.5    # 실시간 박스 표시 (obj_conf 통합 여부는 상태머신 1단계 때 결정)
+
+[stationary_fill]
+# 동적배경: 객체가 일정 시간 정지하면(움직임 없으면) 그 자리를 그냥 배경으로 채움.
+enabled    = true
+hold_sec   = 5.0    # 이 시간(초) 동안 안 움직이면 정지로 보고 채움
+move_px     = 8     # bbox 중심이 이만큼(px) 안 움직이면 "정지"로 간주

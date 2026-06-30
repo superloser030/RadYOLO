@@ -1,337 +1,241 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
   <title>RadYOLO 3D Viewer</title>
+---v2d---
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>RadYOLO 2D</title>","is_error":false}]},"uuid":"74bd7862-b1b8-4cd0-af28-b9ed52f22864","timestamp":"2026-06-30T00:49:15.124Z","toolUseResult":{"stdout":"<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>RadYOLO 3D Viewer</title>
+---v2d---
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>RadYOLO 2D</title>","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false},"sourceToolAssistantUUID":"a1c7e12c-985a-4e2f-bb3d-34e4af811e7c","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"74bd7862-b1b8-4cd0-af28-b9ed52f22864","isSidechain":false,"attachment":{"type":"task_reminder","content":[],"itemCount":0},"type":"attachment","uuid":"38b79009-c922-498d-8bc7-ee6c48b6ce97","timestamp":"2026-06-30T00:49:15.127Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"38b79009-c922-498d-8bc7-ee6c48b6ce97","isSidechain":false,"message":{"model":"claude-sonnet-4-6","id":"msg_01CqKz8Rj1CrzXhjCrcoDkCL","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"OK so the current `viewer.html` (3D viewer) exists in git history at HEAD. Let me restore it from git. Also the `viewer2d.html` is there too.
+
+The issue is that:
+1. `src/viewer/viewer.html` was staged to be renamed to `src/viewer/legacy/viewer3d_legacy.html`
+2. But then the destination was deleted
+3. And the new `viewer.html` that was supposed to replace it either was never created or was deleted
+
+I need to:
+1. Create `src/viewer/legacy/` directory
+2. Restore both the old 3D and 2D viewers from git history
+3. Move them into the legacy folder with their new names
+4. Then create a fresh `viewer.html` for the current version
+
+Looking at the git status, I can see the rename operations were staged but the destination files got deleted, so I need to recover the originals and properly set up the legacy structure.
+
+The user had started a new unified viewer system where the old viewers would be archived and replaced, but the new `viewer.html` that was untracked at the start of our conversation has since disappeared. The quickest path forward is to restore the 3D viewer from HEAD as the working `viewer.html` to get the site functional again, then figure out what the new viewer implementation should have been. Let me check what `_ViewerHandler` actually does in main_r.py to understand how the viewer is being served, since the user mentioned the window suddenly stopped appearing.","signature":"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"}],"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":1352,"cache_read_input_tokens":40764,"output_tokens":1122,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":1352,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[{"input_tokens":1,"output_tokens":1122,"cache_read_input_tokens":40764,"cache_creation_input_tokens":1352,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":1352},"type":"message"}],"speed":"standard"},"diagnostics":null},"requestId":"req_011CcYXQn1tfwpQGhBzvYRLb","type":"assistant","uuid":"77559b60-8552-440c-a7fb-878eec8dc779","timestamp":"2026-06-30T00:49:32.524Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"77559b60-8552-440c-a7fb-878eec8dc779","isSidechain":false,"message":{"model":"claude-sonnet-4-6","id":"msg_01CqKz8Rj1CrzXhjCrcoDkCL","type":"message","role":"assistant","content":[{"type":"text","text":"뷰어 파일이 삭제됐고, 이전 세션에서 새 `viewer.html`을 만들려다 미완성인 상태예요. git HEAD에서 3D 뷰어 내용 가져와서 복구할게요."}],"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":1352,"cache_read_input_tokens":40764,"output_tokens":1122,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":1352,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[{"input_tokens":1,"output_tokens":1122,"cache_read_input_tokens":40764,"cache_creation_input_tokens":1352,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":1352},"type":"message"}],"speed":"standard"},"diagnostics":null},"requestId":"req_011CcYXQn1tfwpQGhBzvYRLb","type":"assistant","uuid":"cc42a3af-bc68-493a-80af-a245636f3939","timestamp":"2026-06-30T00:49:32.963Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"cc42a3af-bc68-493a-80af-a245636f3939","isSidechain":false,"message":{"model":"claude-sonnet-4-6","id":"msg_01CqKz8Rj1CrzXhjCrcoDkCL","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01TxVPKxFsJrEVvhVeN6WEVm","name":"Read","input":{"file_path":"D:\projects\RadYOLO\main_r.py","offset":441,"limit":50},"caller":{"type":"direct"}}],"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":1352,"cache_read_input_tokens":40764,"output_tokens":1122,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":1352,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[{"input_tokens":1,"output_tokens":1122,"cache_read_input_tokens":40764,"cache_creation_input_tokens":1352,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":1352},"type":"message"}],"speed":"standard"},"diagnostics":null},"requestId":"req_011CcYXQn1tfwpQGhBzvYRLb","type":"assistant","uuid":"e32e6b8f-1022-45c5-8a57-f688d63d22a9","timestamp":"2026-06-30T00:49:33.692Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"e32e6b8f-1022-45c5-8a57-f688d63d22a9","isSidechain":false,"promptId":"26ff8715-91ad-4a92-89a8-ae310af44392","type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01TxVPKxFsJrEVvhVeN6WEVm","type":"tool_result","content":"441	class _ViewerHandler(http.server.SimpleHTTPRequestHandler):
+442	    """정적 파일 + /stream (실시간 웹캠 MJPEG)."""
+443	    def do_GET(self):
+444	        if self.path == "/stream":
+445	            self._mjpeg()
+446	        else:
+447	            super().do_GET()
+448	
+449	    def _mjpeg(self):
+450	        import time as _t, cv2 as _cv
+451	        try:
+452	            self.send_response(200)
+453	            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+454	            self.send_header("Cache-Control", "no-cache")
+455	            self.end_headers()
+456	        except Exception:
+457	            return
+458	        while not receiver.shutdown_event.is_set():
+459	            frame = receiver.get_latest_frame()
+460	            if frame is None:
+461	                _t.sleep(0.05); continue
+462	            ok, buf = _cv.imencode(".jpg", frame, [_cv.IMWRITE_JPEG_QUALITY, 70])
+463	            if not ok:
+464	                continue
+465	            try:
+466	                self.wfile.write(b"--frame\r\
+Content-Type: image/jpeg\r\
+\r\
+")
+467	                self.wfile.write(buf.tobytes())
+468	                self.wfile.write(b"\r\
+")
+469	            except (BrokenPipeError, ConnectionResetError):
+470	                break
+471	            _t.sleep(0.1)   # ~10fps
+472	
+473	    def log_message(self, *args):   # 폴링/스트림 로그 도배 방지
+474	        pass
+475	
+476	
+477	def _start_viewer(port=8000):
+478	    # sender.toml 의 intrinsic 을 viewer 가 fetch 할 JSON 으로 export
+479	    # (archive_data 가 data/ 를 비운 뒤여야 하므로 viewer 시작 시점에 생성)
+480	    export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")
+481	    os.chdir(PROJECT_ROOT)
+482	    # Tailscale IP 에 바인드 → 휴대폰 등 Tailscale 기기에서 외부 접근(외부인 차단).
+483	    # network.toml 의 desktop_ip(데스크톱 Tailscale IP)를 사용.
+484	    from src.utils.config import load_network
+485	    host = load_network().get("desktop_ip", "0.0.0.0")
+486	    server = http.server.ThreadingHTTPServer((host, port), _ViewerHandler)
+487	    url = f"http://{host}:{port}/src/viewer/viewer.html"
+488	    threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+489	    print(f"\
+=== 뷰어 시작 (통합 2D/3D + 콘솔) ===")
+490	    print(f"[Server] {url}")"}]},"uuid":"d24c5712-f387-4d3c-9486-890307e382d2","timestamp":"2026-06-30T00:49:33.697Z","toolUseResult":{"type":"text","file":{"filePath":"D:\projects\RadYOLO\main_r.py","content":"class _ViewerHandler(http.server.SimpleHTTPRequestHandler):
+    """정적 파일 + /stream (실시간 웹캠 MJPEG)."""
+    def do_GET(self):
+        if self.path == "/stream":
+            self._mjpeg()
+        else:
+            super().do_GET()
+
+    def _mjpeg(self):
+        import time as _t, cv2 as _cv
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "multipart/x-mixed-replace; boundary=frame")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+        except Exception:
+            return
+        while not receiver.shutdown_event.is_set():
+            frame = receiver.get_latest_frame()
+            if frame is None:
+                _t.sleep(0.05); continue
+            ok, buf = _cv.imencode(".jpg", frame, [_cv.IMWRITE_JPEG_QUALITY, 70])
+            if not ok:
+                continue
+            try:
+                self.wfile.write(b"--frame\r\
+Content-Type: image/jpeg\r\
+\r\
+")
+                self.wfile.write(buf.tobytes())
+                self.wfile.write(b"\r\
+")
+            except (BrokenPipeError, ConnectionResetError):
+                break
+            _t.sleep(0.1)   # ~10fps
+
+    def log_message(self, *args):   # 폴링/스트림 로그 도배 방지
+        pass
+
+
+def _start_viewer(port=8000):
+    # sender.toml 의 intrinsic 을 viewer 가 fetch 할 JSON 으로 export
+    # (archive_data 가 data/ 를 비운 뒤여야 하므로 viewer 시작 시점에 생성)
+    export_camera_json(PROJECT_ROOT / "data" / "scene" / "camera.json")
+    os.chdir(PROJECT_ROOT)
+    # Tailscale IP 에 바인드 → 휴대폰 등 Tailscale 기기에서 외부 접근(외부인 차단).
+    # network.toml 의 desktop_ip(데스크톱 Tailscale IP)를 사용.
+    from src.utils.config import load_network
+    host = load_network().get("desktop_ip", "0.0.0.0")
+    server = http.server.ThreadingHTTPServer((host, port), _ViewerHandler)
+    url = f"http://{host}:{port}/src/viewer/viewer.html"
+    threading.Timer(0.5, lambda: webbrowser.open(url)).start()
+    print(f"\
+=== 뷰어 시작 (통합 2D/3D + 콘솔) ===")
+    print(f"[Server] {url}")","numLines":50,"startLine":441,"totalLines":639}},"sourceToolAssistantUUID":"e32e6b8f-1022-45c5-8a57-f688d63d22a9","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"d24c5712-f387-4d3c-9486-890307e382d2","isSidechain":false,"message":{"model":"claude-sonnet-4-6","id":"msg_01CqKz8Rj1CrzXhjCrcoDkCL","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01Ef8CYJaV7Fj4uw6X62mqmh","name":"Bash","input":{"command":"cd D:/projects/RadYOLO && git show HEAD:src/viewer/viewer.html | wc -l && git show HEAD:src/viewer/viewer2d.html | wc -l","description":"Check sizes of viewer files in git"},"caller":{"type":"direct"}}],"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":1352,"cache_read_input_tokens":40764,"output_tokens":1122,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":1352,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[{"input_tokens":1,"output_tokens":1122,"cache_read_input_tokens":40764,"cache_creation_input_tokens":1352,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":1352},"type":"message"}],"speed":"standard"},"diagnostics":null},"requestId":"req_011CcYXQn1tfwpQGhBzvYRLb","type":"assistant","uuid":"b65bfd57-4b3f-46a8-9e0b-c984bc772cf1","timestamp":"2026-06-30T00:49:34.402Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"b65bfd57-4b3f-46a8-9e0b-c984bc772cf1","isSidechain":false,"promptId":"26ff8715-91ad-4a92-89a8-ae310af44392","type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01Ef8CYJaV7Fj4uw6X62mqmh","type":"tool_result","content":"337
+76","is_error":false}]},"uuid":"0e3c0bd8-e59b-4c27-aaf1-7d4019bd8d81","timestamp":"2026-06-30T00:49:34.553Z","toolUseResult":{"stdout":"337
+76","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false},"sourceToolAssistantUUID":"b65bfd57-4b3f-46a8-9e0b-c984bc772cf1","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"0e3c0bd8-e59b-4c27-aaf1-7d4019bd8d81","isSidechain":false,"message":{"model":"claude-sonnet-4-6","id":"msg_01TsYqBgyPN2ZFFamHLSqodF","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"OK, so:
+1. The HTTP server serves from project root (os.chdir(PROJECT_ROOT)) and uses `SimpleHTTPRequestHandler` as the base
+2. It binds to Tailscale IP
+3. URL is `http://{host}:{port}/src/viewer/viewer.html`
+4. Old 3D viewer was 337 lines, 2D viewer was 76 lines
+
+The comment in `_start_viewer` says "통합 2D/3D + 콘솔" (integrated 2D/3D + console), suggesting the new viewer.html should be a combined one.
+Looking at the git history, there was a new combined viewer.html that appeared as an untracked file in the initial snapshot, but it seems to have been deleted or lost since then. The git status showed the old viewers being renamed to legacy versions while a fresh viewer.html was staged, but now that file is gone.
+
+The quickest fix is to recreate the legacy directory, restore the old 3D and 2D viewer content from git HEAD into their legacy locations, and then rebuild the new combined viewer.html from scratch. The previous session had started creating a new combined viewer but it got deleted. Since I don't have details on what that was supposed to look like, I'll restore the legacy files from git and then build a combined 2D+3D viewer from scratch. Let me first pull both the old 2D and 3D viewers to see what I'm working with.","signature":"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"}],"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":2039,"cache_read_input_tokens":42116,"output_tokens":1132,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":2039,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[{"input_tokens":1,"output_tokens":1132,"cache_read_input_tokens":42116,"cache_creation_input_tokens":2039,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":2039},"type":"message"}],"speed":"standard"},"diagnostics":null},"requestId":"req_011CcYXSDZ4wfxi5YKvjh5pY","type":"assistant","uuid":"6332bfa1-2d9d-4cf8-9413-3dab476c7668","timestamp":"2026-06-30T00:49:55.114Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"6332bfa1-2d9d-4cf8-9413-3dab476c7668","isSidechain":false,"message":{"model":"claude-sonnet-4-6","id":"msg_01TsYqBgyPN2ZFFamHLSqodF","type":"message","role":"assistant","content":[{"type":"text","text":"새 combined 뷰어가 이전 세션에서 만들어졌다가 삭제된 것 같아요. legacy 파일들과 새 `viewer.html`을 복구할게요."}],"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":2039,"cache_read_input_tokens":42116,"output_tokens":1132,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":2039,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[{"input_tokens":1,"output_tokens":1132,"cache_read_input_tokens":42116,"cache_creation_input_tokens":2039,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":2039},"type":"message"}],"speed":"standard"},"diagnostics":null},"requestId":"req_011CcYXSDZ4wfxi5YKvjh5pY","type":"assistant","uuid":"3cb365fa-0d65-4147-ba4c-7613f2bd5555","timestamp":"2026-06-30T00:49:55.162Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"3cb365fa-0d65-4147-ba4c-7613f2bd5555","isSidechain":false,"message":{"model":"claude-sonnet-4-6","id":"msg_01TsYqBgyPN2ZFFamHLSqodF","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01RQHFEervYD2cUfd5hbx9CJ","name":"Bash","input":{"command":"cd D:/projects/RadYOLO && git show HEAD:src/viewer/viewer2d.html","description":"Get old 2D viewer content from git"},"caller":{"type":"direct"}}],"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"usage":{"input_tokens":1,"cache_creation_input_tokens":2039,"cache_read_input_tokens":42116,"output_tokens":1132,"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":2039,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[{"input_tokens":1,"output_tokens":1132,"cache_read_input_tokens":42116,"cache_creation_input_tokens":2039,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":2039},"type":"message"}],"speed":"standard"},"diagnostics":null},"requestId":"req_011CcYXSDZ4wfxi5YKvjh5pY","type":"assistant","uuid":"68ebb251-ab79-4ef2-aee0-3127569819bc","timestamp":"2026-06-30T00:49:55.234Z","userType":"external","entrypoint":"claude-desktop","cwd":"D:\projects\RadYOLO","sessionId":"b2e862a0-f2e6-4b4b-ba1d-ac609943bf51","version":"2.1.187","gitBranch":"main","slug":"cozy-splashing-valiant"}
+{"parentUuid":"68ebb251-ab79-4ef2-aee0-3127569819bc","isSidechain":false,"promptId":"26ff8715-91ad-4a92-89a8-ae310af44392","type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01RQHFEervYD2cUfd5hbx9CJ","type":"tool_result","content":"<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>RadYOLO 2D</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #111; overflow: hidden; }
-    canvas { display: block; }
-    #info {
-      position: fixed; top: 12px; left: 12px;
-      color: #aaa; font: 13px monospace;
-      pointer-events: none;
-    }
-    #loading {
-      position: fixed; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      color: #fff; font: 18px monospace; background: #111;
-    }
-    #obj-list {
-      position: fixed; top: 12px; right: 12px;
-      color: #ccc; font: 12px monospace;
-      background: rgba(0,0,0,0.55);
-      padding: 8px 12px;
-      border-radius: 6px;
-      max-width: 260px;
-    }
-    #obj-list h4 { color: #fff; margin-bottom: 4px; font-size: 13px; }
-    #obj-list .obj-entry { margin-top: 4px; line-height: 1.5; }
-    #obj-list .badge {
-      display: inline-block; padding: 1px 5px; border-radius: 3px;
-      font-size: 10px; margin-left: 4px;
-    }
-    .badge-pose  { background: #1a6e3c; color: #7fffb5; }
-    .badge-model { background: #1a3e6e; color: #7fb5ff; }
-    .badge-none  { background: #444;    color: #999; }
+    body { background: #111; overflow: hidden; font: 14px monospace; color: #ccc; }
+    #wrap { position: relative; display: inline-block; }
+    #cam  { display: block; max-width: 100vw; max-height: 100vh; }
+    #ov   { position: absolute; top: 0; left: 0; pointer-events: none; }
+    #info { position: fixed; top: 8px; left: 8px; color: #888;
+            background: rgba(0,0,0,.5); padding: 4px 8px; border-radius: 4px; }
   </style>
 </head>
 <body>
-<div id="loading">로딩 중...</div>
-<div id="info">
-  마우스 드래그: 회전 | 스크롤: 줌 | 우클릭 드래그: 이동<br>
-  <span id="campos"></span>
+<div id="wrap">
+  <img id="cam" src="/stream" alt="webcam">
+  <canvas id="ov"></canvas>
 </div>
-<div id="obj-list" style="display:none">
-  <h4>감지된 객체</h4>
-  <div id="obj-entries"></div>
-</div>
+<div id="info">RadYOLO 2D — 웹캠 + 레이더 거리</div>
 
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-  }
+<script>
+const W_REF = 1920, H_REF = 1080;   // live_overlay.json bbox 기준 해상도
+const cam = document.getElementById('cam');
+const ov  = document.getElementById('ov');
+const ctx = ov.getContext('2d');
+
+const COLORS = {
+  person: '#ff5454', chair: '#54ff54', laptop: '#54a0ff',
+  bottle: '#ffd054', keyboard: '#ff54ff', tv: '#54ffff', mouse: '#ffa054',
+};
+
+function resize() {
+  ov.width  = cam.clientWidth  || cam.naturalWidth  || 854;
+  ov.height = cam.clientHeight || cam.naturalHeight || 480;
 }
-</script>
+cam.addEventListener('load', resize);
+window.addEventListener('resize', resize);
 
-<script type="module">
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
+async function poll() {
+  try {
+    const data = await fetch('/data/scene/live_overlay.json?_=' + Date.now())
+                       .then(r => r.ok ? r.json() : []);
+    const sx = ov.width / W_REF, sy = ov.height / H_REF;
+    ctx.clearRect(0, 0, ov.width, ov.height);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(devicePixelRatio);
-renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
-document.body.appendChild(renderer.domElement);
+    for (const o of data) {
+      const [x1, y1, x2, y2] = o.bbox;
+      const c = COLORS[o.cls] || '#ffffff';
+      const X = x1 * sx, Y = y1 * sy, Wd = (x2 - x1) * sx, Hd = (y2 - y1) * sy;
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x111111);
+      ctx.lineWidth = 2; ctx.strokeStyle = c;
+      ctx.strokeRect(X, Y, Wd, Hd);
 
-const camera = new THREE.PerspectiveCamera(56.3, innerWidth / innerHeight, 0.001, 100);
-camera.position.set(0, 0, 0.8);
+      let label = o.name;
+      if (o.range_m != null) label += '  ' + o.range_m.toFixed(2) + 'm';
+      else                   label += '  (no radar)';
+      if (o.az != null)      label += '  az' + (o.az >= 0 ? '+' : '') + o.az.toFixed(0);
 
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
-controls.target.set(0, 0, -0.6);
-
-// 3D 모델용 조명
-const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambient);
-const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-dirLight.position.set(1, 2, 2);
-scene.add(dirLight);
-
-function getImageData(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      const c = document.createElement('canvas');
-      c.width = img.width; c.height = img.height;
-      c.getContext('2d').drawImage(img, 0, 0);
-      resolve({ data: c.getContext('2d').getImageData(0, 0, img.width, img.height), w: img.width, h: img.height });
-    };
-    img.onerror = reject;
-    img.src = url;
-  });
-}
-
-/**
- * GigaPose 포즈(카메라 프레임, OpenCV: X우, Y하, Z전) →
- * Three.js 뷰어 프레임(X우, Y상, Z후) 변환
- *
- * 변환 행렬: F = diag(1, -1, -1)
- * R_view = F @ R_cam @ F^T
- * t_view: 픽셀 투영 → depth map 룩업
- */
-let _calib = null;  // depth_calib.json (log_linear 모델)
-
-function depthToCam(d) {
-  if (_calib && _calib.model === 'log_linear') {
-    return Math.exp(_calib.a * d + _calib.b);  // 실제 미터 단위
-  }
-  return 0.05 + (1.0 - d) * 1.2;  // 보정 없을 때 fallback
-}
-
-function poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy) {
-  const R = pose.R;
-  const [tx, ty, tz] = pose.t;
-  if (!tz || tz <= 0) return null;
-
-  const px  = Math.round(fx * tx / tz + cx);
-  const py  = Math.round(fy * ty / tz + cy);
-  const pxc = Math.max(0, Math.min(W - 1, px));
-  const pyc = Math.max(0, Math.min(H - 1, py));
-  const d   = depthImg.data.data[(pyc * W + pxc) * 4] / 255;
-
-  const dc = depthToCam(d);
-  const vx = (pxc - cx) / fx * dc;
-  const vy = -(pyc - cy) / fy * dc;
-  const vz = -dc;
-
-  const F  = [1, -1, -1];
-  const Rv = R.map((row, i) => row.map((v, j) => F[i] * v * F[j]));
-
-  return { vx, vy, vz, Rv, tz };
-}
-
-async function loadObjects(depthImg, W, H, fx, fy, cx, cy) {
-  const manifest = await fetch('/data/objects/manifest.json')
-    .then(r => r.ok ? r.json() : [])
-    .catch(() => []);
-  if (!manifest.length) return;
-
-  document.getElementById('obj-list').style.display = 'block';
-  const entriesEl = document.getElementById('obj-entries');
-  const loader    = new GLTFLoader();
-
-  for (const obj of manifest) {
-    const div = document.createElement('div');
-    div.className = 'obj-entry';
-    let badges = '';
-    if (obj.has_pose)  badges += '<span class="badge badge-pose">POSE</span>';
-    if (obj.has_model) badges += '<span class="badge badge-model">GLB</span>';
-    if (!obj.has_model && !obj.has_pose) badges += '<span class="badge badge-none">─</span>';
-    div.innerHTML = `${obj.class} <span style="color:#666">(${obj.dir})</span>${badges}`;
-    entriesEl.appendChild(div);
-
-    if (!obj.has_pose || !obj.has_model) continue;
-
-    // pose.json + template meta.json 로드
-    const [pose, tmplMeta] = await Promise.all([
-      fetch(`/data/objects/${obj.dir}/pose.json`).then(r => r.json()),
-      fetch(`/data/objects/${obj.dir}/templates/meta.json`).then(r => r.json()),
-    ]).catch(() => [null, null]);
-    if (!pose || !tmplMeta) continue;
-
-    const state = poseToViewerState(pose, depthImg, W, H, fx, fy, cx, cy);
-    if (!state) continue;
-
-    // GLB 로드
-    loader.load(
-      `/data/objects/${obj.dir}/model_trellis.glb`,
-      (gltf) => {
-        const group = new THREE.Group();
-
-        // 메쉬 정규화 (prepare_templates.py와 동일)
-        const mc = tmplMeta.mesh_center || [0, 0, 0];
-        const mr = tmplMeta.mesh_radius || 1.0;
-        gltf.scene.position.set(-mc[0], -mc[1], -mc[2]);
-        gltf.scene.scale.setScalar(0.5 / mr);
-        group.add(gltf.scene);
-        scene.add(group);
-
-        // 회전 행렬 → Three.js Matrix4 (3x3만 사용)
-        function applyRv(g, Rv) {
-          const rm = new THREE.Matrix4().set(
-            Rv[0][0], Rv[0][1], Rv[0][2], 0,
-            Rv[1][0], Rv[1][1], Rv[1][2], 0,
-            Rv[2][0], Rv[2][1], Rv[2][2], 0,
-            0, 0, 0, 1
-          );
-          g.setRotationFromMatrix(rm);
-        }
-
-        // 초기 위치·회전·스케일 설정
-        let { vx, vy, vz, Rv, tz } = state;
-        group.position.set(vx, vy, vz);
-        group.scale.setScalar(1.0 / tz);
-        applyRv(group, Rv);
-
-        console.log(`[Viewer] ${obj.dir} 배치  tz=${tz.toFixed(2)}m`);
-
-        // ── 위치 폴링 (YOLO, 200ms) ──────────────────────────────
-        async function pollPos() {
-          try {
-            const live = await fetch(`/data/objects/${obj.dir}/live.json?_=${Date.now()}`)
-              .then(r => r.json());
-            if (typeof live.bbox_cx === 'number') {
-              const nvx = (live.bbox_cx - cx) / fx;
-              const nvy = -(live.bbox_cy - cy) / fy;
-              group.position.set(nvx, nvy, vz);  // Z는 마지막 GigaPose 값 유지
-            }
-          } catch(_) {}
-          setTimeout(pollPos, 200);
-        }
-
-        // ── 회전 폴링 (GigaPose, 5s) ─────────────────────────────
-        async function pollRot() {
-          try {
-            const p2 = await fetch(`/data/objects/${obj.dir}/pose.json?_=${Date.now()}`)
-              .then(r => r.json());
-            const s2 = poseToViewerState(p2, depthImg, W, H, fx, fy, cx, cy);
-            if (s2) {
-              ({ vz, Rv, tz } = s2);          // Z와 회전 갱신
-              group.scale.setScalar(1.0 / tz);
-              applyRv(group, Rv);
-            }
-          } catch(_) {}
-          setTimeout(pollRot, 1000);
-        }
-
-        pollPos();
-        pollRot();
-      },
-      undefined,
-      (err) => console.warn(`[Viewer] ${obj.dir} GLB 로드 실패:`, err),
-    );
-  }
-}
-
-async function build() {
-  const cam = await fetch('/data/scene/camera.json').then(r => r.json());
-
-  _calib = await fetch('/data/scene/depth_calib.json')
-    .then(r => r.ok ? r.json() : null).catch(() => null);
-  if (_calib) {
-    const midZ = -(_calib.range_min_m + _calib.range_max_m) / 2;
-    camera.position.set(0, 0, 1);
-    controls.target.set(0, 0, midZ);
-    controls.update();
-    console.log(`[Viewer] calib 로드: ${_calib.range_min_m.toFixed(2)}~${_calib.range_max_m.toFixed(2)}m`);
-  }
-
-  const hasMask = await fetch('/data/scene/mask.png', { method: 'HEAD' }).then(r => r.ok).catch(() => false);
-  const loads = [getImageData('/data/scene/background.jpg'), getImageData('/data/scene/depth.png')];
-  if (hasMask) loads.push(getImageData('/data/scene/mask.png'));
-  const [color, depth, maskImg] = await Promise.all(loads);
-
-  camera.fov = cam.vfov_deg;
-  camera.updateProjectionMatrix();
-
-  const W = color.w, H = color.h;
-  const STEP = 2;
-  const fx = cam.fx, fy = cam.fy, cx = cam.cx, cy = cam.cy;
-
-  const cols = Math.floor(W / STEP);
-  const rows = Math.floor(H / STEP);
-
-  const positions = new Float32Array(cols * rows * 3);
-  const colors    = new Float32Array(cols * rows * 3);
-  let   count     = 0;
-
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const px = c * STEP;
-      const py = r * STEP;
-      const pi = (py * W + px) * 4;
-
-      if (maskImg && maskImg.data.data[pi] > 128) continue;
-
-      const d  = depth.data.data[pi] / 255;
-      const dc = depthToCam(d);
-
-      positions[count*3]   = (px - cx) / fx * dc;
-      positions[count*3+1] = -(py - cy) / fy * dc;
-      positions[count*3+2] = -dc;
-
-      colors[count*3]   = color.data.data[pi]   / 255;
-      colors[count*3+1] = color.data.data[pi+1] / 255;
-      colors[count*3+2] = color.data.data[pi+2] / 255;
-
-      count++;
+      ctx.font = '15px monospace';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = c;
+      ctx.fillRect(X, Y - 19, tw + 8, 19);
+      ctx.fillStyle = '#000';
+      ctx.fillText(label, X + 4, Y - 5);
     }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions.slice(0, count * 3), 3));
-  geo.setAttribute('color',    new THREE.BufferAttribute(colors.slice(0, count * 3), 3));
-
-  const mat = new THREE.PointsMaterial({
-    vertexColors: true,
-    size: 0.003,
-    sizeAttenuation: true,
-  });
-
-  scene.add(new THREE.Points(geo, mat));
-  document.getElementById('loading').style.display = 'none';
-
-  // 3D 모델 오버레이 (포즈가 있는 객체)
-  await loadObjects(depth, W, H, fx, fy, cx, cy);
+  } catch (e) {}
+  setTimeout(poll, 150);
 }
 
-const camPos = document.getElementById('campos');
-function animate() {
-  requestAnimationFrame(animate);
-  controls.update();
-  renderer.render(scene, camera);
-  const p = camera.position;
-  camPos.textContent = `카메라  X: ${p.x.toFixed(3)}  Y: ${p.y.toFixed(3)}  Z: ${p.z.toFixed(3)}`;
-}
-
-window.addEventListener('resize', () => {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-
-build().catch(e => {
-  document.getElementById('loading').textContent = '로드 실패: ' + e.message;
-});
-animate();
+resize();
+poll();
 </script>
 </body>
 </html>

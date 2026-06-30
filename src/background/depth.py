@@ -37,9 +37,15 @@ def _wait(prompt_id):
         time.sleep(2)
 
 
-def generate_depth():
+def generate_depth(input_path=None):
+    """background.jpg(기본) 또는 input_path 의 이미지로 DA3 depth → depth.png.
+
+    상태머신의 새 물체 DA3 재추론은 input_path 로 '현재 프레임'을 넘긴다(씬 배경
+    background.jpg 를 덮어쓰지 않기 위함). 출력은 항상 depth.png(현 씬 depth 갱신).
+    """
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(INPUT_PATH, COMFYUI_INPUT / "background.jpg")
+    src = Path(input_path) if input_path else INPUT_PATH
+    shutil.copy(src, COMFYUI_INPUT / "background.jpg")
 
     workflow = json.loads(WORKFLOW_PATH.read_text())
 

@@ -1,0 +1,8 @@
+{
+  "yaw_offset_deg": 0.843,
+  "tx": 0.0,
+  "tz": 0.0,
+  "n_samples": 220,
+  "rms_residual_deg": 5.608,
+  "stage": "fine"
+} 

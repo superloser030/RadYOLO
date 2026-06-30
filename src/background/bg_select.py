@@ -5,10 +5,12 @@ from pathlib import Path
 from ultralytics import YOLO
 
 from src.transmission.receiver import frame_queue
+from src.utils.config import load_receiver
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 MODEL_PATH   = PROJECT_ROOT / "models" / "yolo11x-seg.pt"
+_MASK_CONF   = load_receiver().get("yolo", {}).get("mask_conf", 0.4)
 OUTPUT_PATH  = PROJECT_ROOT / "data" / "scene" / "background_raw.jpg"
 CAPTURE_SECS = 10
 
@@ -65,7 +67,7 @@ def select_background():
         except Exception:
             continue
 
-        result  = model(frame, conf=0.3, verbose=False)[0]
+        result  = model(frame, conf=_MASK_CONF, verbose=False)[0]
         score   = _boundary_sharpness(frame, result)
 
         frames.append(frame.copy())
