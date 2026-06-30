@@ -8,17 +8,17 @@
   "2": {
     "class_type": "DownloadAndLoadDepthAnythingV3Model",
     "inputs": {
-      "model": "da3_large.safetensors",
+      "model": "da3metric_large.safetensors",
       "precision": "auto",
       "attention": "auto"
     }
-  },  
+  },
   "3": {
     "class_type": "DepthAnything_V3",
     "inputs": {
       "da3_model": ["2", 0],
       "images": ["1", 0],
-      "normalization_mode": "Standard",
+      "normalization_mode": "Raw",
       "resize_method": "resize",
       "invert_depth": false,
       "keep_model_size": false

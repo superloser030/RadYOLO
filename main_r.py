@@ -273,6 +273,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
     SCENE        = PROJECT_ROOT / "data" / "scene"
     DEPTH_PATH   = SCENE / "depth.png"
     CALIB_PATH   = SCENE / "depth_calib.json"
+    METRIC_PATH  = SCENE / "depth_metric.npy"   # DA3 metric(Raw) 미터맵 — 있으면 보정 우회
     OBJECTS_DIR  = PROJECT_ROOT / "data" / "objects"
     DA3_INPUT    = SCENE / "da3_frame.jpg"   # 새 물체 DA3 재추론 입력(배경 안 건드림)
 
@@ -283,9 +284,12 @@ def live_update_loop(cam_cfg, enable_pose=True):
     detect_conf = min(live_conf, obj_conf)   # 검출은 낮게(추적 안정), 등록만 obj_conf
 
     # 배경 depth + 보정계수 — 새 물체 DA3 재추론에 같은 계수 재적용. 리스트로 nonlocal 흉내.
-    _depth = [None]; _depth_calib = [None]
+    # _depth_metric: DA3 metric(Raw) 미터맵. 있으면 PNG+calib 대신 이걸 미터로 직접 사용.
+    _depth = [None]; _depth_calib = [None]; _depth_metric = [None]
     def _reload_depth():
         try:
+            if METRIC_PATH.exists():
+                _depth_metric[0] = np.load(str(METRIC_PATH))   # [H,W] 미터
             if DEPTH_PATH.exists() and CALIB_PATH.exists():
                 d = cv2.imread(str(DEPTH_PATH), cv2.IMREAD_GRAYSCALE)
                 if d is not None and d.ndim != 2:
@@ -295,7 +299,9 @@ def live_update_loop(cam_cfg, enable_pose=True):
         except Exception:
             pass
     _reload_depth()
-    if _depth[0] is not None:
+    if _depth_metric[0] is not None:
+        print("[Fusion] DA3 metric(미터) 직접 사용 — 보정 우회")
+    elif _depth[0] is not None:
         print("[Fusion] DA3 depth 게이트 활성")
 
     yolo  = YOLO(YOLO_MODEL)
@@ -312,7 +318,21 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _da3_last  = [0.0]
 
     def _mask_dist(m_frame, cx, cy):
-        """마스크 영역 DA3 거리 median(m). 마스크 없으면 (cx,cy) 1점. depth 없으면 None."""
+        """마스크 영역 DA3 거리 median(m). 마스크 없으면 (cx,cy) 1점. depth 없으면 None.
+
+        metric(Raw) 미터맵이 있으면 그 값을 미터로 직접 사용(보정/log역산 우회).
+        없으면 기존 depth.png(0~255) + calib 로 depth_to_range."""
+        met = _depth_metric[0]
+        if met is not None:
+            dh, dw = met.shape[:2]
+            if m_frame is not None:
+                mm = cv2.resize(m_frame, (dw, dh)) if (dh, dw) != m_frame.shape else m_frame
+                vals = met[mm > 0.5]
+                if len(vals) > 0:
+                    return float(np.median(vals))
+            bx = max(0, min(dw - 1, int(cx * dw / cam_w)))
+            by = max(0, min(dh - 1, int(cy * dh / cam_h)))
+            return float(met[by, bx])
         dep, cal = _depth[0], _depth_calib[0]
         if dep is None or cal is None:
             return None
