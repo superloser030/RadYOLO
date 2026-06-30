@@ -674,6 +674,20 @@ def _start_matlab_cfar():
         return None
 
 
+def _wait_meta_start_radar(no_radar):
+    # 레이더 메타(.mat 설정)는 레이더의 필수 선행 — 받을 때까지 게이트로 대기한다.
+    # 늦게 와도(sender 늦게 켜짐 등) 오는 순간 radar_live 시작. --no-radar 면 생략.
+    if no_radar:
+        print("[Init] --no-radar: 레이더 생략 (웹캠만)")
+        return None
+    print("[Init] 레이더 메타 수신 대기...")
+    while not receiver._chirp_ready.wait(timeout=10):
+        print("[Init] 메타 미수신 — sender/레이더 켜졌는지 확인. 계속 대기 (Ctrl+C 종료)")
+    print("[Init] 메타 확정 — 2초 후 radar_live 시작")
+    time.sleep(2)
+    return _start_matlab_cfar()
+
+
 def _verify_intake(secs=3.0):
     import time as _t
     targets_path = PROJECT_ROOT / "data" / "radar" / "targets.json"
@@ -773,6 +787,7 @@ if __name__ == "__main__":
     parser.add_argument("--skip-3d",    action="store_true", help="Trellis 3D 모델 생성 건너뜀")
     parser.add_argument("--skip-calib", action="store_true", help="레이더 기반 depth 보정 건너뜀")
     parser.add_argument("--viewer-only", action="store_true", help="뷰어만 시작")
+    parser.add_argument("--no-radar",    action="store_true", help="레이더 생략 (메타 대기 안 함, 웹캠만)")
     parser.add_argument("--verify", action="store_true",
                         help="경량 검증: 수신+radar+YOLO박스+뷰어만 (배경/depth/crop/3D 전부 스킵)")
     parser.add_argument("--calib", action="store_true",
@@ -794,14 +809,7 @@ if __name__ == "__main__":
         threading.Thread(target=meta_receive,   daemon=True).start()
         threading.Thread(target=radar_receive,  daemon=True).start()
         threading.Thread(target=webcam_receive, daemon=True).start()
-        import time as _vt
-        print("[Init] 레이더 메타 수신 대기...")
-        if receiver._chirp_ready.wait(timeout=20):
-            print("[Init] 메타 확정 — 2초 후 radar_live 시작")
-            _vt.sleep(2)
-            _matlab_proc = _start_matlab_cfar()
-        else:
-            print("[Init] 메타 타임아웃(20s) — 웹캠만 (레이더 미시작)")
+        _matlab_proc = _wait_meta_start_radar(args.no_radar)
         _http_server = _start_viewer()
         t_live = threading.Thread(target=live_update_loop, args=(cam_cfg, False), daemon=True)
         t_live.start()
@@ -832,14 +840,7 @@ if __name__ == "__main__":
         t_radar.start()
         t_webcam.start()
 
-        import time as _time
-        print("[Init] 레이더 메타 수신 대기...")
-        if receiver._chirp_ready.wait(timeout=20):
-            print("[Init] 메타 확정 — 2초 후 시작")
-            _time.sleep(2)
-            _matlab_proc = _start_matlab_cfar()
-        else:
-            print("[Init] 메타 타임아웃(20s) — 웹캠만으로 진행 (레이더 CFAR 미시작)")
+        _matlab_proc = _wait_meta_start_radar(args.no_radar)
 
         print("\n=== Step 0.5: 레이더+웹캠 수신 확인 (3초) ===")
         _verify_intake(3.0)
