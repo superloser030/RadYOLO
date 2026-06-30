@@ -146,6 +146,8 @@ def main():
     sel = 0
     up_idx = 0
     last_up_remaining = initial
+    reveal_count = np.zeros((H, W), dtype=np.int16)  # 픽셀별 연속 미검출 프레임 수
+    REVEAL_MIN = 3   # N프레임 연속 YOLO 미검출이어야 배경으로 인정 (단일 틱 miss 방지)
 
     try:
         while True:
@@ -161,9 +163,13 @@ def main():
                 if img.shape[:2] != (H, W):
                     img = cv2.resize(img, (W, H))
 
-                obj       = _object_mask(yolo, img, dilate_px, mask_conf)   # 팽창 → 손가락/머리카락 잔상 제거
-                revealed  = cv2.bitwise_not(obj)                 # 객체 없는(드러난) 영역
-                new_cover = cv2.bitwise_and(remaining, revealed) # 새로 채울 수 있는 곳
+                obj = _object_mask(yolo, img, dilate_px, mask_conf)
+                # 연속 미검출 카운터 갱신: YOLO에 잡히면 즉시 0 리셋
+                reveal_count[obj == 0] += 1
+                reveal_count[obj > 0]   = 0
+                # N프레임 연속 미검출 픽셀만 "드러난 배경"으로 인정
+                stable    = (reveal_count >= REVEAL_MIN).astype(np.uint8) * 255
+                new_cover = cv2.bitwise_and(remaining, stable)  # 새로 채울 수 있는 곳
                 cover_px  = int((new_cover > 0).sum())
 
                 if cover_px >= thr_px:                           # 전체의 cover_min% 이상이면 선정
