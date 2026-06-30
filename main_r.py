@@ -317,17 +317,29 @@ def live_update_loop(cam_cfg, enable_pose=True):
     _da3_lock  = threading.Lock()   # DA3 재추론 공유(동시 MODELING 시 1회만)
     _da3_last  = [0.0]
 
+    _ERODE_K = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (25, 25))   # 마스크 침식(보수적)
+
+    def _erode_vals(arr, m_frame):
+        """마스크를 침식해 경계 픽셀(인접 물체/배경 오염) 제거 후 그 영역 depth 값.
+        너무 깎여 비면(작은 물체) 원본 마스크로 폴백."""
+        h, w = arr.shape[:2]
+        mm = cv2.resize(m_frame, (w, h)) if (h, w) != m_frame.shape else m_frame
+        mmb = (mm > 0.5).astype(np.uint8)
+        er  = cv2.erode(mmb, _ERODE_K)
+        sel = er if er.any() else mmb
+        return arr[sel > 0]
+
     def _mask_dist(m_frame, cx, cy):
         """마스크 영역 DA3 거리 median(m). 마스크 없으면 (cx,cy) 1점. depth 없으면 None.
 
-        metric(Raw) 미터맵이 있으면 그 값을 미터로 직접 사용(보정/log역산 우회).
-        없으면 기존 depth.png(0~255) + calib 로 depth_to_range."""
+        마스크는 침식(보수적)해서 경계의 인접 물체/배경 픽셀 오염을 막는다 — 겹친
+        물체 경계에서 median 이 출렁이던 문제 방지.
+        metric(Raw) 미터맵이 있으면 그 값을 미터로 직접 사용(보정/log역산 우회)."""
         met = _depth_metric[0]
         if met is not None:
             dh, dw = met.shape[:2]
             if m_frame is not None:
-                mm = cv2.resize(m_frame, (dw, dh)) if (dh, dw) != m_frame.shape else m_frame
-                vals = met[mm > 0.5]
+                vals = _erode_vals(met, m_frame)
                 if len(vals) > 0:
                     return float(np.median(vals))
             bx = max(0, min(dw - 1, int(cx * dw / cam_w)))
@@ -338,8 +350,7 @@ def live_update_loop(cam_cfg, enable_pose=True):
             return None
         dh, dw = dep.shape[:2]
         if m_frame is not None:
-            mm = cv2.resize(m_frame, (dw, dh)) if (dh, dw) != m_frame.shape else m_frame
-            vals = dep[mm > 0.5]
+            vals = _erode_vals(dep, m_frame)
             if len(vals) > 0:
                 return depth_to_range(float(np.median(vals)) / 255.0, cal)
         bx = max(0, min(dw - 1, int(cx * dw / cam_w)))
