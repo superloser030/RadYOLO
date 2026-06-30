@@ -27,6 +27,8 @@ upscale       = true               # true=ESRGAN(ComfyUI), false=lanczos(cv2)
 poll_sec      = 1.0                # 새 프레임 폴링 간격(s)
 mask_dilate_px = 15                # YOLO 마스크 팽창(px) — 손가락/머리카락 등 가장자리 잔상 제거
                                    # 클수록 객체를 넉넉히 잡음(잔상↓, 채울영역↓). 0=끔
+reveal_min    = 15                 # 이만큼 연속 프레임 객체가 없어야 "배경"으로 인정해 채움
+                                   # 작으면 YOLO가 잠깐 놓친 사람을 박제. 클수록 안전(배경 완성 느림)
 
 [yolo]
 # YOLO 검출 신뢰도 기준 — 용도별로 다르게.

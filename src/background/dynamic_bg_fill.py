@@ -132,7 +132,7 @@ def main():
     up_idx = 0
     last_up_remaining = initial
     reveal_count = np.zeros((H, W), dtype=np.int16)
-    REVEAL_MIN = 3
+    REVEAL_MIN = int(cfg.get("reveal_min", 15))
 
     try:
         while True:
