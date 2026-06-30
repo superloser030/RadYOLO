@@ -1,0 +1,97 @@
+% ============================================================
+%  RadYOLO 보고서 — Overleaf 권장 컴파일러: XeLaTeX (kotex)
+% ============================================================
+\documentclass[11pt,oneside]{book}
+
+\usepackage{kotex}                       % 한글
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx,float}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{listings,xcolor}
+\usepackage[most]{tcolorbox}
+\usepackage{caption}
+\usepackage[hidelinks]{hyperref}
+
+% ── 코드 블록 스타일 ──────────────────────────────────────
+\definecolor{codebg}{gray}{0.96}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{codebg},
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+}
+
+% ── 구현 상태 박스 (완성/진행중/미완성) ──────────────────
+\newtcolorbox{statusdone}[1][]{colback=green!5,colframe=green!55!black,
+  title=\textbf{구현 상태: 완성}#1, fonttitle=\bfseries, boxrule=0.6pt}
+\newtcolorbox{statuswip}[1][]{colback=orange!6,colframe=orange!75!black,
+  title=\textbf{구현 상태: 진행 중}#1, fonttitle=\bfseries, boxrule=0.6pt}
+\newtcolorbox{statustodo}[1][]{colback=red!5,colframe=red!60!black,
+  title=\textbf{구현 상태: 미완성}#1, fonttitle=\bfseries, boxrule=0.6pt}
+
+% ── 설계결정/문제해결 강조 박스 ──────────────────────────
+\newtcolorbox{designbox}[1]{colback=blue!4,colframe=blue!45!black,
+  title=설계 결정: #1, fonttitle=\bfseries, boxrule=0.5pt, breakable}
+
+\title{\textbf{RadYOLO}\\[4pt]
+  \large mmWave 레이더 -- 카메라 융합 기반\\ 실시간 거리 추정 및 3D 장면 복원}
+\author{연구노트 / 시스템 보고서}
+\date{2026}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+% ============================================================
+\part{시스템 개요}
+% ============================================================
+\input{parts/00_overview}
+
+% ============================================================
+% 1부 — 레이더–카메라 융합 거리 추정 (완성)
+% ============================================================
+\part{송신 / 수신}
+\input{parts/01_tx}
+
+\part{레이더 신호처리}
+\input{parts/02_radar}
+
+\part{객체 검출 (카메라)}
+\input{parts/03_detect}
+
+\part{단안 깊이 추정}
+\input{parts/04_depth}
+
+\part{레이더--카메라 융합}
+\input{parts/05_fusion}
+
+% ============================================================
+% 2부 — 3D 장면 복원 (진행 중)
+% ============================================================
+\part{동적 배경 복원}
+\input{parts/06_dynbg}
+
+\part{객체 3D 복원}
+\input{parts/07_recon}
+
+\part{3D 뷰어}
+\input{parts/08_viewer}
+
+% ============================================================
+\part{설계 철학과 오프라인 확장}
+\input{parts/10_philosophy}
+
+% ============================================================
+\part{결론}
+\input{parts/09_conclusion}
+
+% ============================================================
+\appendix
+\part{부록}
+\input{parts/AA_appendix}
+
+\end{document}
